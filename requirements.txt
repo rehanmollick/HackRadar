@@ -1,0 +1,25 @@
+# Scraping
+feedparser>=6.0
+beautifulsoup4>=4.12
+requests>=2.31
+lxml>=5.0
+
+# APIs
+arxiv>=2.1
+huggingface-hub>=0.20
+PyGithub>=2.1
+kaggle>=1.6
+
+# Dedup
+rapidfuzz>=3.5
+
+# Scoring
+google-genai>=1.0
+pydantic>=2.5
+
+# Email
+jinja2>=3.1
+
+# Testing
+pytest>=8.0
+responses>=0.25

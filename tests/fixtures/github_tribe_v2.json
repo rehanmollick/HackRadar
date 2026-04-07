@@ -1,0 +1,58 @@
+[
+  {
+    "id": 987654321,
+    "name": "tribev2",
+    "full_name": "facebookresearch/tribev2",
+    "private": false,
+    "html_url": "https://github.com/facebookresearch/tribev2",
+    "description": "TRIBE v2: Open-source foundation model for predicting brain activity from visual inputs. Predict voxel-level fMRI responses across the visual cortex.",
+    "fork": false,
+    "created_at": "2026-03-26T09:00:00Z",
+    "updated_at": "2026-03-26T14:00:00Z",
+    "pushed_at": "2026-03-26T14:00:00Z",
+    "homepage": "https://ai.meta.com/blog/tribe-v2-brain-predictive-foundation-model/",
+    "size": 4820,
+    "stargazers_count": 1547,
+    "watchers_count": 1547,
+    "language": "Python",
+    "forks_count": 93,
+    "open_issues_count": 4,
+    "license": {
+      "key": "cc-by-nc-4.0",
+      "name": "Creative Commons Attribution Non Commercial 4.0 International",
+      "spdx_id": "CC-BY-NC-4.0",
+      "url": "https://api.github.com/licenses/cc-by-nc-4.0"
+    },
+    "topics": ["neuroscience", "fmri", "brain", "foundation-model", "vision", "pytorch"],
+    "visibility": "public",
+    "default_branch": "main"
+  },
+  {
+    "id": 987600001,
+    "name": "some-other-new-repo",
+    "full_name": "facebookresearch/some-other-new-repo",
+    "private": false,
+    "html_url": "https://github.com/facebookresearch/some-other-new-repo",
+    "description": "An internal utility library for experiment tracking.",
+    "fork": false,
+    "created_at": "2026-03-25T11:00:00Z",
+    "updated_at": "2026-03-25T11:00:00Z",
+    "pushed_at": "2026-03-25T11:00:00Z",
+    "homepage": null,
+    "size": 120,
+    "stargazers_count": 8,
+    "watchers_count": 8,
+    "language": "Python",
+    "forks_count": 1,
+    "open_issues_count": 0,
+    "license": {
+      "key": "mit",
+      "name": "MIT License",
+      "spdx_id": "MIT",
+      "url": "https://api.github.com/licenses/mit"
+    },
+    "topics": [],
+    "visibility": "public",
+    "default_branch": "main"
+  }
+]

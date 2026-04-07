@@ -1,0 +1,53 @@
+[
+  {
+    "modelId": "facebook/tribev2",
+    "id": "facebook/tribev2",
+    "pipeline_tag": "feature-extraction",
+    "downloads": 1842,
+    "created_at": "2026-03-26T09:15:00.000Z",
+    "lastModified": "2026-03-26T14:30:00.000Z",
+    "cardData": {
+      "language": ["en"],
+      "license": "cc-by-nc-4.0",
+      "tags": ["neuroscience", "fmri", "brain", "vision", "foundation-model"],
+      "description": "TRIBE v2 is Meta FAIR's open-source foundation model for predicting brain activity (fMRI responses) from visual inputs. Given an image or video frame, the model predicts voxel-level activation patterns across the visual cortex. Trained on large-scale fMRI data from the Natural Scenes Dataset and Human Connectome Project. Weights available for non-commercial research use. Runs on a single T4 GPU."
+    },
+    "private": false,
+    "gated": false,
+    "likes": 312
+  },
+  {
+    "modelId": "someuser/random-diffusion-finetuned",
+    "id": "someuser/random-diffusion-finetuned",
+    "pipeline_tag": "text-to-image",
+    "downloads": 45,
+    "created_at": "2026-03-26T08:00:00.000Z",
+    "lastModified": "2026-03-26T08:00:00.000Z",
+    "cardData": {
+      "language": ["en"],
+      "license": "openrail",
+      "tags": ["diffusion", "finetuned"],
+      "description": "A fine-tuned Stable Diffusion model."
+    },
+    "private": false,
+    "gated": false,
+    "likes": 3
+  },
+  {
+    "modelId": "researchlab/audio-sep-v1",
+    "id": "researchlab/audio-sep-v1",
+    "pipeline_tag": "audio-to-audio",
+    "downloads": 210,
+    "created_at": "2026-03-25T16:00:00.000Z",
+    "lastModified": "2026-03-25T16:00:00.000Z",
+    "cardData": {
+      "language": ["en"],
+      "license": "apache-2.0",
+      "tags": ["audio", "separation", "music"],
+      "description": "Real-time audio source separation model. Isolate vocals, drums, and instruments from any audio stream."
+    },
+    "private": false,
+    "gated": false,
+    "likes": 87
+  }
+]
