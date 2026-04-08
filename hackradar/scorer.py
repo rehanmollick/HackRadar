@@ -167,7 +167,7 @@ def _call_gemini(prompt: str) -> ScoringBatchResponse:
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_json_schema=ScoringBatchResponse,
+            response_schema=ScoringBatchResponse,
         ),
     )
     return ScoringBatchResponse.model_validate_json(response.text)
