@@ -58,8 +58,8 @@ jobs:
           git diff --quiet data/seen.json || (
             git config user.name "HackRadar Bot" &&
             git config user.email "hackradar@users.noreply.github.com" &&
-            git pull --rebase origin main &&
             git add data/seen.json &&
             git commit -m "chore: update seen.json [skip ci]" &&
+            git pull --rebase origin main &&
             git push
           )
