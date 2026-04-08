@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -110,6 +112,17 @@ def tribe_hf_item():
         huggingface_url="https://huggingface.co/facebook/tribev2",
         github_url="https://github.com/facebookresearch/tribev2",
     )
+
+
+@pytest.fixture
+async def temp_db(tmp_path, monkeypatch):
+    """Point hackradar.config.DB_PATH at a throwaway file and init the schema."""
+    from hackradar import config, db
+
+    path = tmp_path / "hackradar.db"
+    monkeypatch.setattr(config, "DB_PATH", path)
+    await db.init()
+    yield path
 
 
 @pytest.fixture
