@@ -66,7 +66,7 @@ class ScrapeResult:
 
 
 class ScoredItemResponse(BaseModel):
-    """Pydantic model for Gemini scoring output. One per item in a batch."""
+    """Full Pass 2 scoring response. One per item in a batch."""
 
     title: str
     open_score: float
@@ -82,9 +82,23 @@ class ScoredItemResponse(BaseModel):
 
 
 class ScoringBatchResponse(BaseModel):
-    """Top-level response from Gemini: a list of scored items."""
+    """Top-level Pass 2 response: a list of scored items."""
 
     items: list[ScoredItemResponse]
+
+
+class TriageResponse(BaseModel):
+    """Pass 1 cheap triage response. Novelty+wow composite only."""
+
+    title: str
+    triage_score: float  # 1-10 on novelty+wow composite
+    reason: str  # one-line justification, helps debug Pass 1 misses
+
+
+class TriageBatchResponse(BaseModel):
+    """Top-level Pass 1 response: a list of triage items."""
+
+    items: list[TriageResponse]
 
 
 @dataclasses.dataclass
