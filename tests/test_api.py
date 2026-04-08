@@ -271,6 +271,114 @@ def test_sources_health_starts_empty(client):
     assert r.json() == {"sources": []}
 
 
+# ---------------------------------------------------------------------------
+# /api/items/{id}/chat — Pass 3 streaming chat
+# ---------------------------------------------------------------------------
+
+class _FakeAnthropic:
+    name = "anthropic"
+    model = "fake-claude"
+
+    def __init__(self, chunks=None, raise_exc=None):
+        self._chunks = chunks or ["Hello", " from", " fake", " Claude."]
+        self._raise = raise_exc
+
+    async def call_batch(self, items, prompt, response_schema):
+        raise NotImplementedError
+
+    async def chat_stream(self, messages, system) -> AsyncIterator[str]:
+        if self._raise:
+            raise self._raise
+        for c in self._chunks:
+            yield c
+
+
+def _seed_item(client) -> int:
+    """Run a fake scan so an item exists in the DB. Return its id."""
+    with patch("hackradar.api.get_all_sources", side_effect=_fake_get_all_sources), \
+         patch("hackradar.main.get_all_sources", side_effect=_fake_get_all_sources), \
+         patch("hackradar.main.enrich_items", side_effect=lambda items: items), \
+         patch("hackradar.main.build_pass1_providers", side_effect=_fake_pass1), \
+         patch("hackradar.main.build_pass2_providers", side_effect=_fake_pass2):
+        post = client.post(
+            "/api/scans",
+            json={"from_date": "2026-03-25", "to_date": "2026-03-27", "enrich": False},
+        )
+        scan_id = post.json()["scan_id"]
+        scan = client.get(f"/api/scans/{scan_id}").json()
+    return scan["items"][0]["id"]
+
+
+def test_chat_streams_chunks_and_persists_history(client):
+    item_id = _seed_item(client)
+    fake = _FakeAnthropic(chunks=["Tribe", " v2", " is", " fascinating."])
+
+    with patch("hackradar.api._provider_factory", return_value=fake):
+        with client.stream(
+            "POST",
+            f"/api/items/{item_id}/chat",
+            json={"message": "Tell me more"},
+        ) as resp:
+            assert resp.status_code == 200
+            body = b"".join(resp.iter_bytes()).decode()
+
+    # SSE body should contain each chunk + a [DONE] terminator
+    assert "Tribe" in body
+    assert "fascinating" in body
+    assert "[DONE]" in body
+
+    # User + assistant turns are now in chats
+    item_resp = client.get(f"/api/items/{item_id}").json()
+    chats = item_resp["chats"]
+    assert any(c["role"] == "user" and c["content"] == "Tell me more" for c in chats)
+    assert any(c["role"] == "assistant" and "fascinating" in c["content"] for c in chats)
+
+
+def test_chat_404_for_unknown_item(client):
+    with patch("hackradar.api._provider_factory", return_value=_FakeAnthropic()):
+        r = client.post("/api/items/9999/chat", json={"message": "hi"})
+    assert r.status_code == 404
+
+
+def test_chat_rate_limited_when_quota_exhausted(client, monkeypatch):
+    item_id = _seed_item(client)
+    monkeypatch.setattr(config, "PASS3_RATE_LIMIT_PER_HOUR", 1)
+    fake = _FakeAnthropic(chunks=["ok"])
+
+    with patch("hackradar.api._provider_factory", return_value=fake):
+        # First turn goes through
+        r1 = client.post(
+            f"/api/items/{item_id}/chat", json={"message": "first"}
+        )
+        # Drain the stream so the user turn gets persisted
+        list(r1.iter_bytes())
+        assert r1.status_code == 200
+
+        # Second turn trips the rate limit
+        r2 = client.post(
+            f"/api/items/{item_id}/chat", json={"message": "second"}
+        )
+    assert r2.status_code == 429
+
+
+def test_chat_provider_error_surfaces_in_stream(client):
+    from hackradar.scoring.providers.base import ProviderError as PE
+
+    item_id = _seed_item(client)
+    fake = _FakeAnthropic(raise_exc=PE("boom"))
+
+    with patch("hackradar.api._provider_factory", return_value=fake):
+        with client.stream(
+            "POST",
+            f"/api/items/{item_id}/chat",
+            json={"message": "hi"},
+        ) as resp:
+            assert resp.status_code == 200
+            body = b"".join(resp.iter_bytes()).decode()
+    assert "provider_error" in body
+    assert "boom" in body
+
+
 def test_sources_health_after_scan(client):
     with patch("hackradar.api.get_all_sources", side_effect=_fake_get_all_sources), \
          patch("hackradar.main.get_all_sources", side_effect=_fake_get_all_sources), \

@@ -31,9 +31,12 @@ from typing import Any, Optional
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from sse_starlette.sse import EventSourceResponse
 
 from hackradar import config, db
 from hackradar.main import run_scan
+from hackradar.scoring.providers.anthropic import AnthropicProvider
+from hackradar.scoring.providers.base import ProviderError, RateLimitError
 from hackradar.sources import get_all_sources
 
 logger = logging.getLogger("hackradar.api")
@@ -244,6 +247,124 @@ async def get_item(item_id: int) -> dict[str, Any]:
         "item": _item_row_to_dict(item),
         "chats": [dict(c) for c in chats],
     }
+
+
+# ---------------------------------------------------------------------------
+# Pass 3 chat — Anthropic streaming
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="User's next turn")
+
+
+CHAT_SYSTEM_PROMPT = (
+    "You are a hackathon technology scout assistant. The user is a CS student "
+    "who wins hackathons by finding bleeding-edge open-source tech and building "
+    "interactive demos. They have Claude Code, free T4 GPUs, and React/Next.js "
+    "experience. Be specific and concrete: name files, libraries, exact commands. "
+    "When asked for hackathon ideas, give a single sharp pitch — what the demo "
+    "looks like, the tech stack, the wow moment, the buildability gotchas."
+)
+
+
+def _build_chat_system(item_row: dict[str, Any], scored: dict[str, Any]) -> str:
+    bits = [CHAT_SYSTEM_PROMPT, "", "ITEM CONTEXT:"]
+    bits.append(f"Title: {item_row.get('title')}")
+    if item_row.get("description"):
+        bits.append(f"Description: {item_row['description'][:800]}")
+    for url_field in ("source_url", "github_url", "huggingface_url", "paper_url", "demo_url"):
+        if item_row.get(url_field):
+            bits.append(f"{url_field}: {item_row[url_field]}")
+    if item_row.get("stars") is not None:
+        bits.append(f"GitHub stars: {item_row['stars']}")
+    if item_row.get("language"):
+        bits.append(f"Primary language: {item_row['language']}")
+    if scored:
+        if scored.get("summary"):
+            bits.append(f"Pass 2 summary: {scored['summary']}")
+        if scored.get("hackathon_idea"):
+            bits.append(f"Pass 2 hackathon idea: {scored['hackathon_idea']}")
+    return "\n".join(bits)
+
+
+def _provider_factory():
+    """Indirection for tests to swap in a fake provider."""
+    return AnthropicProvider()
+
+
+@app.post("/api/items/{item_id}/chat")
+async def chat_with_item(item_id: int, req: ChatRequest):
+    """Streamed Pass 3 chat over SSE.
+
+    Client posts {"message": "..."}. Server replies with text/event-stream.
+    Each event has data=<chunk>. Final event has data=[DONE].
+
+    Rate limited to PASS3_RATE_LIMIT_PER_HOUR user turns globally (not per
+    item) to keep the daily Anthropic spend bounded.
+    """
+    item = await db.get_item(item_id)
+    if item is None:
+        raise HTTPException(404, f"Item {item_id} not found")
+
+    # Client-side rate limit: count user turns in the last hour.
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    recent = await db.count_recent_chats(since_iso=one_hour_ago)
+    if recent >= config.PASS3_RATE_LIMIT_PER_HOUR:
+        raise HTTPException(
+            429,
+            f"Pass 3 rate limit hit ({recent}/{config.PASS3_RATE_LIMIT_PER_HOUR} "
+            "user turns in the last hour). Try again later.",
+        )
+
+    history = await db.get_chats_for_item(item_id)
+    messages = [{"role": c["role"], "content": c["content"]} for c in history]
+    messages.append({"role": "user", "content": req.message})
+
+    # Persist the user turn before streaming so it counts toward the rate limit.
+    await db.append_chat(item_id, "user", req.message)
+
+    # Get the most recent Pass 2 score (if any) for richer system context.
+    scored: dict[str, Any] = {}
+    item_data = dict(item)
+    # Fetch the latest score row for context — best-effort, ignore errors.
+    try:
+        latest_scan_id = await db.latest_finished_scan_id()
+        if latest_scan_id is not None:
+            rows = await db.get_items_for_scan(latest_scan_id, limit=500)
+            for r in rows:
+                if r.get("id") == item_id:
+                    scored = r
+                    break
+    except Exception:
+        pass
+
+    system = _build_chat_system(item_data, scored)
+    provider = _provider_factory()
+
+    async def event_generator():
+        collected: list[str] = []
+        try:
+            async for chunk in provider.chat_stream(messages=messages, system=system):
+                collected.append(chunk)
+                yield {"event": "chunk", "data": chunk}
+        except RateLimitError as exc:
+            yield {"event": "error", "data": f"rate_limited: {exc}"}
+        except ProviderError as exc:
+            yield {"event": "error", "data": f"provider_error: {exc}"}
+        except Exception as exc:  # pragma: no cover
+            logger.exception("Chat stream crashed")
+            yield {"event": "error", "data": f"unhandled: {exc}"}
+        else:
+            # Persist the assembled assistant turn on clean completion.
+            full = "".join(collected)
+            if full:
+                try:
+                    await db.append_chat(item_id, "assistant", full)
+                except Exception:
+                    logger.exception("Failed to persist assistant turn")
+            yield {"event": "done", "data": "[DONE]"}
+
+    return EventSourceResponse(event_generator())
 
 
 # ---------------------------------------------------------------------------
