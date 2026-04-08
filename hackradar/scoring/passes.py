@@ -93,8 +93,12 @@ async def pass1_triage(
         )
 
     # Triage the rest in batches.
+    # Pace between batches so we don't blow the provider's per-minute token
+    # budget. Groq free tier is 6000 TPM on llama-3.1-8b-instant; unpaced
+    # runs get killed by 429s after the first 2-3 batches.
     pass1_coordinator_dead = True  # flips False on first successful batch
-    for start in range(0, len(to_triage), batch_size):
+    batch_starts = list(range(0, len(to_triage), batch_size))
+    for batch_idx, start in enumerate(batch_starts):
         batch = to_triage[start : start + batch_size]
         response, provider_name = await call_with_fallback(
             providers=providers,
@@ -104,17 +108,20 @@ async def pass1_triage(
         )
         if response is None:
             logger.warning("Pass 1 batch %d-%d: all providers failed", start, start + len(batch))
-            continue
-        pass1_coordinator_dead = False
+        else:
+            pass1_coordinator_dead = False
+            for triage_resp in _zip_triage_responses(batch, response):
+                item, resp = triage_resp
+                triaged_results[item.title] = TriagedItem(
+                    item=item,
+                    triage_score=resp.triage_score,
+                    reason=resp.reason,
+                    bypassed=False,
+                )
 
-        for triage_resp in _zip_triage_responses(batch, response):
-            item, resp = triage_resp
-            triaged_results[item.title] = TriagedItem(
-                item=item,
-                triage_score=resp.triage_score,
-                reason=resp.reason,
-                bypassed=False,
-            )
+        # Sleep between batches (skip after the final batch).
+        if batch_idx < len(batch_starts) - 1 and config.PASS1_INTER_BATCH_SLEEP_S > 0:
+            await asyncio.sleep(config.PASS1_INTER_BATCH_SLEEP_S)
 
     # Safety net: if Pass 1 coordinator died for EVERY batch, pass all
     # non-bypassed items through unfiltered. Better to waste a few Pass 2

@@ -143,7 +143,9 @@ async def test_call_batch_pydantic_validation_failure_raises_schema_error():
         await provider.call_batch(items, build_pass1_prompt(items), TriageBatchResponse)
 
 
-async def test_missing_api_key_raises_provider_error():
+async def test_missing_api_key_raises_provider_error(monkeypatch):
+    from hackradar import config
+    monkeypatch.setattr(config, "GROQ_API_KEY", "")
     provider = GroqProvider(api_key="")
     with pytest.raises(ProviderError, match="GROQ_API_KEY"):
         await provider.call_batch(_sample_items(), "prompt", TriageBatchResponse)

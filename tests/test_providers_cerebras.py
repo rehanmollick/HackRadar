@@ -79,7 +79,11 @@ async def test_context_overflow_raises_client_side_before_any_call():
         await provider.call_batch(items, huge_prompt, ScoringBatchResponse)
 
 
-async def test_missing_api_key_raises_provider_error():
+async def test_missing_api_key_raises_provider_error(monkeypatch):
+    # Force both the explicit arg AND the config fallback to be empty so
+    # the provider can't silently pick up a real key from the dev env.
+    from hackradar import config
+    monkeypatch.setattr(config, "CEREBRAS_API_KEY", "")
     provider = CerebrasProvider(api_key="")
     with pytest.raises(ProviderError, match="CEREBRAS_API_KEY"):
         await provider.call_batch([_tribe_item()], "tiny prompt", ScoringBatchResponse)

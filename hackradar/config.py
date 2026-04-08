@@ -58,11 +58,15 @@ FUZZY_MATCH_THRESHOLD = 85
 # ---------------------------------------------------------------------------
 PASS1_PROVIDER = os.environ.get("PASS1_PROVIDER", "groq")
 PASS1_MODEL = os.environ.get("PASS1_MODEL", "llama-3.1-8b-instant")
-PASS1_BATCH_SIZE = int(os.environ.get("PASS1_BATCH_SIZE", "20"))
+PASS1_BATCH_SIZE = int(os.environ.get("PASS1_BATCH_SIZE", "8"))
 PASS1_TRIAGE_THRESHOLD = float(os.environ.get("PASS1_TRIAGE_THRESHOLD", "5.0"))
+# Groq free tier caps llama-3.1-8b-instant at 6000 TPM. Without pacing,
+# back-to-back batches blow the TPM budget and everything after batch ~2
+# gets 429'd. Sleep between batches to stay under ~5 batches/min.
+PASS1_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS1_INTER_BATCH_SLEEP_S", "12.0"))
 
 PASS2_PROVIDER = os.environ.get("PASS2_PROVIDER", "cerebras")
-PASS2_MODEL = os.environ.get("PASS2_MODEL", "qwen-3-32b")
+PASS2_MODEL = os.environ.get("PASS2_MODEL", "qwen-3-235b-a22b-instruct-2507")
 PASS2_BATCH_SIZE = int(os.environ.get("PASS2_BATCH_SIZE", "3"))
 PASS2_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS2_INTER_BATCH_SLEEP_S", "2.0"))
 
