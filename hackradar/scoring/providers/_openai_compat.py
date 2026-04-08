@@ -33,16 +33,22 @@ async def call_chat_json(
     timeout_s: float = 60.0,
     temperature: float = 0.3,
     max_tokens: int = 4096,
+    extra_headers: dict[str, str] | None = None,
 ) -> T:
     """POST to an OpenAI-compatible /chat/completions with JSON response_format.
 
     Returns a parsed instance of response_schema. Raises our provider errors
     on any upstream failure.
+
+    extra_headers: optional extra HTTP headers merged into the request.
+        OpenRouter needs HTTP-Referer + X-Title for free-tier attribution.
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    if extra_headers:
+        headers.update(extra_headers)
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],

@@ -180,12 +180,39 @@ def format_item_for_scoring(item: Item) -> dict[str, Any]:
 def build_pass2_prompt(items: list[Item]) -> str:
     formatted = [format_item_for_scoring(item) for item in items]
     items_json = json.dumps(formatted, ensure_ascii=False, indent=2)
+    n = len(items)
+    example = (
+        '{\n'
+        '  "items": [\n'
+        '    {\n'
+        '      "title": "<exact title from input>",\n'
+        '      "open_score": 7.0,\n'
+        '      "novelty_score": 9.0,\n'
+        '      "wow_score": 8.0,\n'
+        '      "build_score": 7.0,\n'
+        '      "total_score": 7.9,\n'
+        '      "summary": "...",\n'
+        '      "hackathon_idea": "..." | null,\n'
+        '      "tech_stack": "..." | null,\n'
+        '      "why_now": "..." | null,\n'
+        '      "effort_estimate": "..." | null\n'
+        '    }\n'
+        '  ]\n'
+        '}'
+    )
     return (
         f"{PASS2_SCORING_SYSTEM}\n\n"
-        f"Here are the {len(items)} items to score:\n\n"
+        f"Here are the {n} items to score:\n\n"
         f"{items_json}\n\n"
-        'Return a JSON object with a single key "items" containing an array of '
-        "scored items, one per input item in the same order."
+        f'Return a JSON object with a single key "items" containing an array of '
+        f"EXACTLY {n} scored items, in the SAME ORDER as the input. Do not add, "
+        f"drop, merge, or reorder items.\n\n"
+        f"EVERY item MUST include all of these fields: title (copy the exact "
+        f"title string from the input), open_score, novelty_score, wow_score, "
+        f"build_score, total_score, summary. The remaining four fields "
+        f"(hackathon_idea, tech_stack, why_now, effort_estimate) are required "
+        f"only when total_score >= 6.5, otherwise set them to null.\n\n"
+        f"Shape example (for one item):\n{example}"
     )
 
 

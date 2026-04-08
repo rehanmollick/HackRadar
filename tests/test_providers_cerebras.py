@@ -69,11 +69,16 @@ async def test_call_batch_happy_path():
 
 async def test_context_overflow_raises_client_side_before_any_call():
     """CRITICAL: oversized batch must raise ContextOverflowError BEFORE the HTTP call."""
-    # Build an absurdly large prompt that guarantees we blow the context budget.
+    # Pin the budget to the small 8K model so we can generate a prompt that
+    # exceeds it without being absurdly large.
     huge_prompt = "x" * 50000  # ~12500 tokens at 4 chars/token
     items = [_tribe_item()]
 
-    provider = CerebrasProvider(api_key="test-key")
+    provider = CerebrasProvider(
+        api_key="test-key",
+        model="llama3.1-8b",
+        context_budget=7500,
+    )
     with pytest.raises(ContextOverflowError, match="exceeds context budget"):
         # Note: no respx.mock — if this touches the network, it will fail loudly.
         await provider.call_batch(items, huge_prompt, ScoringBatchResponse)

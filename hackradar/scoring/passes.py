@@ -233,7 +233,16 @@ def _zip_scored_responses(
     items: list[Item],
     response: ScoringBatchResponse,
 ) -> list[tuple[Item, ScoredItemResponse]]:
-    """Match Pass 2 responses back to input items."""
+    """Match Pass 2 responses back to input items.
+
+    Happy path: identical counts → zip by position. This is the most reliable
+    strategy because Cerebras/OpenRouter sometimes omit or mangle the title
+    field even when we demand it in the prompt.
+
+    Fallback: counts differ → build a by-title index from responses that DO
+    have titles, try exact match, then fuzzy match. Responses with no title
+    can still be matched positionally if we can find an unused slot.
+    """
     if len(response.items) == len(items):
         return list(zip(items, response.items))
 
@@ -241,12 +250,22 @@ def _zip_scored_responses(
         "Pass 2 response count mismatch: sent %d, got %d — matching by title",
         len(items), len(response.items),
     )
-    by_title = {r.title.lower(): r for r in response.items}
+
+    # Build a by-title index from responses that actually carry a title.
+    by_title: dict[str, ScoredItemResponse] = {}
+    untitled: list[ScoredItemResponse] = []
+    for r in response.items:
+        if r.title:
+            by_title[r.title.lower()] = r
+        else:
+            untitled.append(r)
+
     out: list[tuple[Item, ScoredItemResponse]] = []
-    for item in items:
+    consumed_untitled = 0
+    for idx, item in enumerate(items):
         resp = by_title.get(item.title.lower())
         if resp is None:
-            # Fuzzy fallback
+            # Fuzzy fallback on titled responses.
             try:
                 from rapidfuzz import process as rfprocess
 
@@ -257,6 +276,10 @@ def _zip_scored_responses(
                     resp = by_title[match[0]]
             except ImportError:
                 pass
+        if resp is None and consumed_untitled < len(untitled):
+            # Last resort: positional fallback using untitled responses.
+            resp = untitled[consumed_untitled]
+            consumed_untitled += 1
         if resp is not None:
             out.append((item, resp))
     return out

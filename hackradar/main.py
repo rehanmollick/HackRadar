@@ -31,6 +31,7 @@ from hackradar.scoring.passes import pass1_triage, pass2_score, run_scraper_trac
 from hackradar.scoring.providers.base import LLMProvider
 from hackradar.scoring.providers.cerebras import CerebrasProvider
 from hackradar.scoring.providers.groq import GroqProvider
+from hackradar.scoring.providers.openrouter import OpenRouterProvider
 from hackradar.sources import get_all_sources
 
 logging.basicConfig(
@@ -45,13 +46,56 @@ logger = logging.getLogger("hackradar")
 # ---------------------------------------------------------------------------
 
 def build_pass1_providers() -> list[LLMProvider]:
-    """Pass 1 fallback chain. Groq primary. (More providers added in V2.1.)"""
-    return [GroqProvider()]
+    """Pass 1 fallback chain for cheap triage.
+
+    Order matters (tries each in sequence on failure):
+      1. Cerebras llama3.1-8b  — 60K TPM, 10x Groq's ceiling.
+      2. Groq llama-3.1-8b-instant — same model, 6K TPM, kept as soft fallback.
+      3. OpenRouter llama-3.3-70b  — unlimited-ish free fallback, bigger model.
+    """
+    chain: list[LLMProvider] = []
+    if config.CEREBRAS_API_KEY:
+        chain.append(
+            CerebrasProvider(
+                model=config.PASS1_CEREBRAS_MODEL,
+                name="cerebras_llama8b",
+            )
+        )
+    if config.GROQ_API_KEY:
+        chain.append(GroqProvider())
+    if config.OPENROUTER_API_KEY:
+        chain.append(
+            OpenRouterProvider(
+                model=config.PASS1_OPENROUTER_MODEL,
+                name="openrouter_pass1",
+            )
+        )
+    return chain
 
 
 def build_pass2_providers() -> list[LLMProvider]:
-    """Pass 2 fallback chain. Cerebras primary."""
-    return [CerebrasProvider()]
+    """Pass 2 fallback chain for full 4-criterion scoring.
+
+    Order matters:
+      1. Cerebras qwen-3-235b  — primary, 64K ctx, 30K TPM.
+      2. OpenRouter gpt-oss-120b — free fallback when Cerebras is throttled.
+    """
+    chain: list[LLMProvider] = []
+    if config.CEREBRAS_API_KEY:
+        chain.append(
+            CerebrasProvider(
+                model=config.PASS2_MODEL,
+                name="cerebras_qwen235b",
+            )
+        )
+    if config.OPENROUTER_API_KEY:
+        chain.append(
+            OpenRouterProvider(
+                model=config.PASS2_OPENROUTER_MODEL,
+                name="openrouter_pass2",
+            )
+        )
+    return chain
 
 
 # ---------------------------------------------------------------------------

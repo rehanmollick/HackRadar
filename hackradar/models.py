@@ -66,15 +66,22 @@ class ScrapeResult:
 
 
 class ScoredItemResponse(BaseModel):
-    """Full Pass 2 scoring response. One per item in a batch."""
+    """Full Pass 2 scoring response. One per item in a batch.
 
-    title: str
+    `title` is optional because larger reasoning models (e.g. qwen-3-235b)
+    sometimes omit it even when the prompt demands it. We fall back to
+    positional matching in _zip_scored_responses when titles are missing.
+    `summary` is also optional for the same reason — some models skip it
+    on low-scoring items despite the schema.
+    """
+
+    title: Optional[str] = None
     open_score: float
     novelty_score: float
     wow_score: float
     build_score: float
-    total_score: float
-    summary: str
+    total_score: float = 0.0
+    summary: Optional[str] = ""
     hackathon_idea: Optional[str] = None
     tech_stack: Optional[str] = None
     why_now: Optional[str] = None

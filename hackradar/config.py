@@ -56,19 +56,33 @@ FUZZY_MATCH_THRESHOLD = 85
 # ---------------------------------------------------------------------------
 # V2 multi-pass scoring
 # ---------------------------------------------------------------------------
-PASS1_PROVIDER = os.environ.get("PASS1_PROVIDER", "groq")
-PASS1_MODEL = os.environ.get("PASS1_MODEL", "llama-3.1-8b-instant")
-PASS1_BATCH_SIZE = int(os.environ.get("PASS1_BATCH_SIZE", "8"))
+# Pass 1 = cheap triage filter. Primary provider is Cerebras llama3.1-8b
+# (60K TPM, vs Groq's 6K TPM on the same base model). Groq kept as soft
+# fallback, OpenRouter as outer ring.
+PASS1_PROVIDER = os.environ.get("PASS1_PROVIDER", "cerebras")
+PASS1_MODEL = os.environ.get("PASS1_MODEL", "llama-3.1-8b-instant")  # Groq id
+PASS1_CEREBRAS_MODEL = os.environ.get("PASS1_CEREBRAS_MODEL", "llama3.1-8b")
+PASS1_OPENROUTER_MODEL = os.environ.get(
+    "PASS1_OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+)
+PASS1_BATCH_SIZE = int(os.environ.get("PASS1_BATCH_SIZE", "10"))
 PASS1_TRIAGE_THRESHOLD = float(os.environ.get("PASS1_TRIAGE_THRESHOLD", "5.0"))
-# Groq free tier caps llama-3.1-8b-instant at 6000 TPM. Without pacing,
-# back-to-back batches blow the TPM budget and everything after batch ~2
-# gets 429'd. Sleep between batches to stay under ~5 batches/min.
-PASS1_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS1_INTER_BATCH_SLEEP_S", "12.0"))
+# Cerebras llama3.1-8b is 60K TPM + 30 RPM. 8s per batch of 10 = ~7 RPM
+# and ~40K TPM — comfortably under both limits with headroom for variance.
+PASS1_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS1_INTER_BATCH_SLEEP_S", "8.0"))
 
+# Pass 2 = full 4-criterion scoring. Cerebras qwen-3-235b primary.
 PASS2_PROVIDER = os.environ.get("PASS2_PROVIDER", "cerebras")
 PASS2_MODEL = os.environ.get("PASS2_MODEL", "qwen-3-235b-a22b-instruct-2507")
-PASS2_BATCH_SIZE = int(os.environ.get("PASS2_BATCH_SIZE", "3"))
-PASS2_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS2_INTER_BATCH_SLEEP_S", "2.0"))
+PASS2_OPENROUTER_MODEL = os.environ.get(
+    "PASS2_OPENROUTER_MODEL", "openai/gpt-oss-120b:free"
+)
+# Cerebras qwen-3-235b free tier is 30K TPM + 30 RPM. With ~3K tok/item,
+# a batch of 4 is ~12K tokens; pacing 25s/batch keeps avg under ~30K TPM
+# AND under 30 RPM. If a batch still 429s, the coordinator falls through
+# to OpenRouter automatically for that batch.
+PASS2_BATCH_SIZE = int(os.environ.get("PASS2_BATCH_SIZE", "4"))
+PASS2_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS2_INTER_BATCH_SLEEP_S", "25.0"))
 
 PASS3_PROVIDER = os.environ.get("PASS3_PROVIDER", "anthropic")
 PASS3_MODEL = os.environ.get("PASS3_MODEL", "claude-opus-4-6")
