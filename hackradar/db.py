@@ -158,6 +158,26 @@ async def any_scan_running() -> bool:
         return bool(row and row["n"] > 0)
 
 
+async def list_scans(limit: int = 50) -> list[dict[str, Any]]:
+    async with _connect() as db:
+        cursor = await db.execute(
+            "SELECT * FROM scans ORDER BY started_at DESC LIMIT ?",
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def latest_finished_scan_id() -> Optional[int]:
+    async with _connect() as db:
+        cursor = await db.execute(
+            "SELECT id FROM scans WHERE status = 'done' "
+            "ORDER BY finished_at DESC LIMIT 1"
+        )
+        row = await cursor.fetchone()
+        return int(row["id"]) if row else None
+
+
 # ---------------------------------------------------------------------------
 # Items
 # ---------------------------------------------------------------------------
