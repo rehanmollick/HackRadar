@@ -1,43 +1,13 @@
-"""Shared fixtures for HackRadar test suite."""
+"""Shared fixtures for HackRadar V2 test suite."""
 
 from __future__ import annotations
 
-import os
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 from hackradar.models import Item
-
-
-# ---------------------------------------------------------------------------
-# Stub google.genai at collection time so hackradar.scorer can be imported
-# without requiring the real google-genai package in the test environment.
-# ---------------------------------------------------------------------------
-
-def _stub_google_genai() -> None:
-    """Insert MagicMock shims for google.genai into sys.modules if absent."""
-    if "google.genai" not in sys.modules:
-        # Preserve any real 'google' namespace package that may already exist
-        google_pkg = sys.modules.get("google", MagicMock())
-        genai_mock = MagicMock()
-        types_mock = MagicMock()
-
-        sys.modules.setdefault("google", google_pkg)
-        sys.modules["google.genai"] = genai_mock
-        sys.modules["google.genai.types"] = types_mock
-
-        # Attach the attribute so `from google import genai` resolves
-        try:
-            google_pkg.genai = genai_mock
-        except AttributeError:
-            pass  # google_pkg may be a real namespace package
-
-
-_stub_google_genai()
 
 
 # ---------------------------------------------------------------------------
