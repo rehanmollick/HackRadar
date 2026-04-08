@@ -45,21 +45,37 @@ def _parse_github_repo(url: str) -> tuple[str, str] | None:
     return None
 
 
-def _parse_hf_repo(url: str) -> str | None:
+def _parse_hf_repo(url: str) -> tuple[str, str] | None:
     """
-    Return the 'owner/model-name' repo_id from a HuggingFace URL, or None.
+    Return ('model'|'dataset', 'owner/repo-name') from a HuggingFace URL.
+    Returns None for spaces, profiles, or unparseable URLs.
 
     Handles:
-        https://huggingface.co/facebook/tribev2
-        https://huggingface.co/facebook/tribev2/tree/main
+        https://huggingface.co/facebook/tribev2          -> ('model', 'facebook/tribev2')
+        https://huggingface.co/facebook/tribev2/tree/x   -> ('model', 'facebook/tribev2')
+        https://huggingface.co/datasets/squad            -> ('dataset', 'squad')
+        https://huggingface.co/datasets/lhoestq/demo     -> ('dataset', 'lhoestq/demo')
     """
     try:
         parsed = urlparse(url)
         if "huggingface.co" not in parsed.netloc.lower():
             return None
         parts = [p for p in parsed.path.strip("/").split("/") if p]
+        if not parts:
+            return None
+        # Datasets live under /datasets/...
+        if parts[0] == "datasets":
+            if len(parts) >= 3:
+                return ("dataset", f"{parts[1]}/{parts[2]}")
+            if len(parts) >= 2:
+                return ("dataset", parts[1])
+            return None
+        # Spaces live under /spaces/... — we don't enrich these here.
+        if parts[0] == "spaces":
+            return None
+        # Otherwise it's a model: owner/model-name.
         if len(parts) >= 2:
-            return f"{parts[0]}/{parts[1]}"
+            return ("model", f"{parts[0]}/{parts[1]}")
     except Exception:
         pass
     return None
@@ -139,12 +155,28 @@ def _enrich_huggingface(item: Item) -> None:
     from huggingface_hub import HfApi, hf_hub_url
     from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
-    repo_id = _parse_hf_repo(item.huggingface_url)
-    if repo_id is None:
+    parsed = _parse_hf_repo(item.huggingface_url)
+    if parsed is None:
         logger.warning("Could not parse HuggingFace URL: %s", item.huggingface_url)
         return
 
+    kind, repo_id = parsed
     api = HfApi()
+
+    # Datasets get a much smaller enrichment surface — just downloads.
+    # Skipping the model_info / Space lookup that doesn't apply.
+    if kind == "dataset":
+        try:
+            dinfo = api.dataset_info(repo_id)
+            try:
+                item.downloads = dinfo.downloads
+            except Exception:
+                pass
+        except RepositoryNotFoundError:
+            logger.debug("HuggingFace dataset 404: %s", repo_id)
+        except Exception as exc:
+            logger.debug("HuggingFace dataset_info error for %s: %s", repo_id, exc)
+        return
 
     # --- Model info ---
     try:
