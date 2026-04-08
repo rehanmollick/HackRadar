@@ -23,10 +23,11 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
     try:
         api = HfApi()
 
-        # List models sorted by creation date, most recent first
+        # List models sorted by creation date, most recent first.
+        # huggingface_hub >= 0.27 dropped the `direction` arg; sort="createdAt"
+        # returns newest-first by default.
         model_iter = api.list_models(
             sort="createdAt",
-            direction=-1,
             limit=500,
             cardData=True,
         )
@@ -43,14 +44,15 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
                 if created_at < cutoff:
                     break  # sorted descending, safe to stop
 
-                # Filter: must have a pipeline_tag
+                # Filter: must have a pipeline_tag.
                 if not model.pipeline_tag:
                     continue
 
-                # Filter: minimum downloads
+                # NOTE: We deliberately do NOT filter on download count here.
+                # Brand-new model uploads have ~0 downloads and that's exactly
+                # what we want to surface. The downloads field is enriched
+                # later and used for ranking, not gating.
                 downloads = model.downloads or 0
-                if downloads < config.HF_MIN_DOWNLOADS:
-                    continue
 
                 model_id = model.modelId or model.id
                 hf_url = f"https://huggingface.co/{model_id}"

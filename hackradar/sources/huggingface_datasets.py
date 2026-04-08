@@ -23,11 +23,13 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
     try:
         api = HfApi()
 
+        # huggingface_hub >= 0.27 dropped `direction` and `cardData`. Use
+        # `full=True` to get the card data we need (description, license,
+        # task_categories). sort="createdAt" returns newest-first by default.
         dataset_iter = api.list_datasets(
             sort="createdAt",
-            direction=-1,
             limit=300,
-            cardData=True,
+            full=True,
         )
 
         for dataset in dataset_iter:

@@ -1,14 +1,13 @@
 # Method: HTML scrape
-# URL: https://stability.ai/blog
+# URL: https://stability.ai/news-updates  (the old /blog path now 404s)
 #
-# Stability AI does not provide a public RSS feed. Their blog is a
-# Ghost-based or custom CMS site. The selectors below target the article
-# card grid present in the static HTML response.
+# Stability AI moved to a Squarespace site. The selectors below target the
+# article card grid present in the static HTML response.
 
 from hackradar.sources import register_source
 from hackradar.sources.base_blog import scrape_html
 
-_URL = "https://stability.ai/blog"
+_URL = "https://stability.ai/news-updates"
 _SOURCE = "Stability AI Blog"
 
 _SELECTORS = {

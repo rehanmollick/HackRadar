@@ -15,8 +15,10 @@ from hackradar.sources import register_source
 logger = logging.getLogger(__name__)
 
 FEED_URLS = [
-    "https://web.dev/feed.xml",
-    "https://developer.chrome.com/feeds/blog.xml",  # Bonus: Chrome Developers blog
+    # Canonical web.dev blog feed (web.dev/feed.xml 301s here).
+    "https://web.dev/static/blog/feed.xml",
+    # Chrome Developers blog. The old /feeds/blog.xml path 404s.
+    "https://developer.chrome.com/blog/feed.xml",
 ]
 
 

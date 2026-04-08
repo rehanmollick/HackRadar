@@ -1,6 +1,7 @@
 """Chrome Platform Status scraper — new and shipping web platform features."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -45,7 +46,12 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
             headers=headers,
         )
         resp.raise_for_status()
-        data = resp.json()
+        # Chromestatus prefixes responses with the XSSI anti-CSRF token `)]}'`
+        # which trips up resp.json(). Strip it before parsing.
+        text = resp.text.lstrip()
+        if text.startswith(")]}'"):
+            text = text[4:].lstrip()
+        data = json.loads(text)
 
         features = data if isinstance(data, list) else data.get("features", [])
 
