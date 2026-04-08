@@ -79,7 +79,6 @@ class ScoredItemResponse(BaseModel):
     tech_stack: Optional[str] = None
     why_now: Optional[str] = None
     effort_estimate: Optional[str] = None
-    links: Optional[dict] = None
 
 
 class ScoringBatchResponse(BaseModel):

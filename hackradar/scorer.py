@@ -94,10 +94,9 @@ FOR ITEMS WHERE total_score >= 6.5, also provide:
 - "tech_stack": Suggested stack for the demo
 - "why_now": Why hasn't this been built yet? What's the timing opportunity?
 - "effort_estimate": Rough estimate of setup + build time
-- "links": All relevant URLs (paper, code, model, demo, docs)
 
 FOR ITEMS WHERE total_score < 6.5:
-- Just return scores and a 1-sentence summary. Leave hackathon_idea, tech_stack, why_now, effort_estimate, links as null.
+- Just return scores and a 1-sentence summary. Leave hackathon_idea, tech_stack, why_now, effort_estimate as null.
 
 Respond ONLY in valid JSON matching the schema. No markdown, no preamble, no explanation outside the JSON.
 """).strip()
