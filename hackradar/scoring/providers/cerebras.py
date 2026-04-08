@@ -69,10 +69,16 @@ class CerebrasProvider:
         api_key: str | None = None,
         context_budget: int | None = None,
         name: str | None = None,
+        response_tokens_per_item: int = 1200,
     ):
         self.model = model or config.PASS2_MODEL
         self.api_key = api_key or config.CEREBRAS_API_KEY
         self.context_budget = context_budget or _budget_for(self.model)
+        # Per-item response reservation. Pass 1 triage responses are tiny
+        # (title + 1 float + 1 sentence ≈ 80 tokens/item), Pass 2 scoring
+        # responses are rich (10+ fields ≈ 600-1200 tokens/item). Wire the
+        # right number per provider instance from the caller.
+        self.response_tokens_per_item = response_tokens_per_item
         # Different provider names let the coordinator log which Cerebras
         # instance failed (llama vs qwen) instead of a generic "cerebras".
         self.name = name or f"cerebras_{self.model.split('-')[0]}"
@@ -86,10 +92,10 @@ class CerebrasProvider:
         if not self.api_key:
             raise ProviderError("CEREBRAS_API_KEY is not set")
 
-        # Client-side context budget check. Estimates reserve ~1.2K per item
-        # for the response on top of the prompt itself.
+        # Client-side context budget check. Reserve room for the response
+        # based on the size each schema field actually consumes.
         prompt_tokens = estimate_tokens(prompt)
-        response_reserve = 1200 * max(1, len(items))
+        response_reserve = self.response_tokens_per_item * max(1, len(items))
         total = prompt_tokens + response_reserve
         if total > self.context_budget:
             raise ContextOverflowError(

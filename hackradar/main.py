@@ -59,6 +59,11 @@ def build_pass1_providers() -> list[LLMProvider]:
             CerebrasProvider(
                 model=config.PASS1_CEREBRAS_MODEL,
                 name="cerebras_llama8b",
+                # Pass 1 TriageResponse is just title + score + 1 sentence.
+                # ~80 tokens/item is realistic; reserve 150 for safety.
+                # The default 1200 (sized for Pass 2) would overflow the
+                # 8K context window of llama3.1-8b on free tier.
+                response_tokens_per_item=150,
             )
         )
     if config.GROQ_API_KEY:
