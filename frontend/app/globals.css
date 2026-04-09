@@ -2,18 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { background: #fafaf9; color: #0a0a0a; }
+html, body {
+  background: #0a0a0b;
+  color: #e7e5e4;
+}
 
 .score-pill {
   @apply inline-flex items-center justify-center rounded-md px-2 py-0.5 text-xs font-mono font-bold;
 }
-.score-pill.high   { @apply bg-radar text-white; }
-.score-pill.mid    { @apply bg-amber-500 text-white; }
-.score-pill.low    { @apply bg-stone-300 text-stone-700; }
+.score-pill.high   { @apply bg-emerald-500 text-stone-950; }
+.score-pill.mid    { @apply bg-amber-500 text-stone-950; }
+.score-pill.low    { @apply bg-stone-700 text-stone-300; }
 
 .btn {
-  @apply inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-stone-100 disabled:opacity-50;
+  @apply inline-flex items-center gap-1 rounded-md border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm font-medium text-stone-200 hover:bg-stone-800 disabled:opacity-50;
 }
 .btn-primary {
-  @apply bg-radar text-white border-radar hover:bg-radar-dark;
+  @apply bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-500;
 }

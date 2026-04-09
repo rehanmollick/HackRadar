@@ -8,7 +8,7 @@ The key insight from that win: **the technology itself was the competitive advan
 
 **The problem:** Rehan found TRIBE v2 by luck. There's no systematic way tover these kinds of hidden gems — bleeding-edge, open-source, niche, underexploited technology drops from research labs, open-source projects, new APIs, browser features, datasets, and tools. Existing aggregators (newsletters, trending pages) surface what's already popular. By the time something trends, 50 other hackathon teams have seen it too.
 
-**The solution:** HackRadar — a daily automated pipeline that scrapes directly from the sources where new tech gets published (research blogs, arXiv, HuggingFace, GitHub, Hacker News, Product Hunt, browser platform updates, etc.), uses an LLM to score each item for hackathon viability based on Rehan's specific criteria, and emails a ranked daily digest of the top finds.
+**The solution:** HackRadar — a daily automated pipeline that scrapes directly from the sources where new tech gets published (research blogs, arXiv, HuggingFace, GitHub, Hacker News, Product Hunt, browser platform updates, etc.), uses an LLM to score each item for hackathon viability based on Rehan's specific criteria, and a ranked of the top finds.
 
 **The validation test:** If we run this pipeline as if the date were March 27, 2026 (the day after TRIBE v2 dropped), it MUST surface TRIBE v2 scored highly in the results — without any hardcoded bias tord it. If it doesn't catch TRIBE v2, the system has failed and needs to be fixed.
 
@@ -30,7 +30,6 @@ A Python project (but you're free to use whatever language/tools make the most s
 2. **Deduplicates** items that appear across multiple sources
 3. **Enriches** items with metadata (GitHub stars, model size, license, etc.)
 4. **Scores** each item using an LLM with hackathon-specific criteria
-5. **Emails** a ranked daily digest of the top 10-15 finds
 
 ### Architecture Guidance
 
@@ -74,7 +73,7 @@ These are the primary sources for "TRIBE v2-type" drops. Research labs quietly p
 | HuggingFace Daily Papers | Scrape huggingface.co/papers or API | Curated by AK, high signal. |
 | Papers With Code (latest) | Scrape or API | Focus on papers that have linked code implementations. |
 
-**arXiv volume note:** arXiv gets hundreds of papers daily across these categories. The LLM scoring step is what filters this down. Don't try to pre-filter too aggressively — let the scorer handle it.
+**arXiv volume note:** arXiv gets hundreds of papers daily across these categories. Pre-filter by abstract keywords (model, framework, tool, dataset, benchmark, open-source, demo, API, real-time, interactive, novel) to reduce volume to ~15-20 candidates before LLM scoring. This keeps Gemini API calls within free tier limits while still catching niche releases like TRIBE v2.
 
 ### Category 3: Code Repositories (GitHub API)
 

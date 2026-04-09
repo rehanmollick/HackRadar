@@ -44,6 +44,9 @@ export type ScoredItem = {
   build_score: number;
   summary: string | null;
   hackathon_idea: string | null;
+  tech_stack: string | null;
+  why_now: string | null;
+  effort_estimate: string | null;
 };
 
 export type SourceHealth = {

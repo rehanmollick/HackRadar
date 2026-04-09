@@ -346,7 +346,8 @@ async def get_items_for_scan(
             """
             SELECT items.*, scores.total_score, scores.summary, scores.hackathon_idea,
                    scores.open_score, scores.novelty_score, scores.wow_score,
-                   scores.build_score, scores.provider, scores.model
+                   scores.build_score, scores.provider, scores.model,
+                   scores.tech_stack, scores.why_now, scores.effort_estimate
             FROM items
             JOIN scores ON scores.item_id = items.id
             WHERE scores.scan_id = ? AND scores.pass = 2 AND scores.total_score >= ?

@@ -347,11 +347,15 @@ async def _cmd_db(args) -> int:
     return 2
 
 
-async def _cmd_serve(args) -> int:
-    """Start the FastAPI backend (Next.js is started separately via bin/hackradar)."""
+def _cmd_serve(args) -> int:
+    """Start the FastAPI backend (Next.js is started separately via bin/hackradar).
+
+    Must be sync: uvicorn.run() internally calls asyncio.run(), which fails if
+    we're already inside a running event loop.
+    """
     import uvicorn
 
-    await db.init()
+    asyncio.run(db.init())
     uvicorn.run("hackradar.api:app", host="127.0.0.1", port=8000, reload=args.reload)
     return 0
 
@@ -380,7 +384,7 @@ def main() -> int:
     if args.cmd == "db":
         return asyncio.run(_cmd_db(args))
     if args.cmd == "serve":
-        return asyncio.run(_cmd_serve(args))
+        return _cmd_serve(args)
     parser.print_help()
     return 2
 
