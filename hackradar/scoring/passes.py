@@ -303,6 +303,13 @@ def _make_scored_item(
         + resp.underexploited_score * config.WEIGHT_UNDEREXPLOITED
         + resp.wow_score * config.WEIGHT_WOW
     )
+    # Usability floor: paper-only / non-buildable items cannot outrank
+    # anything with working code. Without this, a U=2 / I=10 / Un=10 / W=10
+    # paper computes to 8.20 and sits above buildable tech at 8.00. Cap such
+    # items at 7.49 so they stay visible (and still get the tech explainer at
+    # SCORE_THRESHOLD=6.5) but never tie a buildable item sitting at 7.50+.
+    if resp.usability_score < 6:
+        total = min(total, 7.49)
     # Gate the rich tech-explainer output so we don't waste UI space
     # on low-scoring items. The tech explainer IS the flagship content,
     # so SCORE_THRESHOLD (6.5) is the right cutoff — items below that

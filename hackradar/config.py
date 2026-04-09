@@ -85,7 +85,7 @@ HIGH_CONVICTION_MIN_WOW = 7.0
 # feedback_prompt_version_bump.md. The score cache is keyed on
 # (content_hash, prompt_version) so stale cached scores don't mask broken
 # prompt changes.
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 # ---------------------------------------------------------------------------
 # Pipeline settings

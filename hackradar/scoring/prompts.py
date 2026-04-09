@@ -23,6 +23,34 @@ open-source tech:
   - Paywalled products, closed APIs, marketing blog posts
   - Tutorial/explainer content, not releases
 
+AUTO-DROP (score ≤2) — these categories are NEVER hackathon building blocks
+regardless of quality, polish, or novelty:
+  - Developer plumbing: auth/credential libraries, package managers,
+    CI/CD configs, project scaffolding/boilerplate generators, SDK wrappers,
+    API client libraries, deployment scripts, container configs, runbook
+    libraries, documentation collections. These are things you USE while
+    building, not things you BUILD ON TOP OF.
+  - Survey / review / meta-analysis papers (titles with "survey", "review",
+    "systematic study", "meta-analysis", "a comprehensive overview of").
+  - Benchmark-only releases — a new eval suite with no new model or tool.
+  - Ethics / policy / governance / alignment-theory frameworks with no
+    buildable artifact.
+  - Position papers, manifestos, opinion pieces, "call to action" papers.
+  - Dataset-only releases UNLESS the dataset enables a clearly novel
+    capability (new modality, first-of-its-kind labels, a domain nobody
+    had data for). Routine dataset cleanups, resamples, and translations
+    drop.
+  - Papers reporting <5% metric improvement on an existing task with an
+    existing architecture.
+  - Version bumps, refactors, schema tests, library cleanups.
+
+NOVELTY OVERRIDE — if an item looks like infrastructure but actually
+introduces a new RESEARCH capability (e.g. "Project Telescope: exposing
+internal agent state during inference", "a compiler that lets you run 70B
+models on 8GB VRAM") then it is NOT plumbing. Pass it. The distinction is
+"does this give me a new thing to demo?" vs "is this something I'd apt-get
+install?"
+
 PASS items that are:
   (a) Open-source, with code OR weights OR a paper with an artifact path,
   (b) Recent (last 30 days), and
@@ -178,11 +206,32 @@ For items where total_score >= 6.5, ALSO provide (these are required):
   - "key_capabilities": 3-5 short bullets. Each bullet is ONE concrete
     fact: hardware requirement, license, a benchmark number, a model
     size, a notable capability. Be specific.
-  - "idea_sparks": EXACTLY 2-3 ONE-LINE hackathon brainstorm sparks.
-    These are inspiration only, labeled as "possible directions" in the
-    UI. Each spark is under 15 words. Do NOT over-specify. Do NOT pick
-    one "flagship" idea. Do NOT enumerate stacks. The user ideates
-    himself — your sparks are just showing "here are weird angles."
+  - "idea_sparks": EXACTLY 3 complete PRODUCT CONCEPTS (not features, not
+    research directions, not visualization ideas). Each must follow this
+    template in a single sentence, under 40 words:
+
+      "[Product type] for [specific user] that [does what] — only
+       possible now because [this tech enables what was previously
+       impossible]"
+
+    BAD: "Visualize agent decision trees in real time."
+    GOOD: "An AI agent replay debugger for developers where you paste an
+    execution trace and get an interactive visual timeline of every tool
+    call and failure point — only possible now because Project Telescope
+    captures agent internals that were previously opaque."
+
+    BAD: "Build apps that query satellite data by location only."
+    GOOD: "A climate-change timelapse generator for journalists where you
+    type any GPS coordinate and get a 10-year satellite animation of that
+    spot — only possible now because LIANet reconstructs imagery from
+    coordinates without needing raw data access."
+
+    Each spark MUST name a specific user (developers, designers,
+    journalists, students, marketers, clinicians, musicians, etc.) AND
+    explain why this SPECIFIC tech unlocks it. A spark that could describe
+    any model in the same space has failed. The "only possible now
+    because" clause is non-negotiable — it's what separates a product
+    concept from a feature list.
 
 For items where total_score < 6.5:
   - Set what_the_tech_does, key_capabilities, and idea_sparks to null.
@@ -298,8 +347,9 @@ def build_pass2_prompt(items: list[Item]) -> str:
         '        "<one concrete fact: benchmark number or capability>"\n'
         '      ],\n'
         '      "idea_sparks": [\n'
-        '        "<one-line brainstorm spark, under 15 words>",\n'
-        '        "<one-line brainstorm spark, under 15 words>"\n'
+        '        "<product concept following the template, under 40 words>",\n'
+        '        "<product concept following the template, under 40 words>",\n'
+        '        "<product concept following the template, under 40 words>"\n'
         '      ]\n'
         '    }\n'
         '  ]\n'
@@ -318,8 +368,11 @@ def build_pass2_prompt(items: list[Item]) -> str:
         f"The three rich fields (what_the_tech_does, key_capabilities, "
         f"idea_sparks) are REQUIRED when total_score >= 6.5, otherwise set "
         f"them to null. key_capabilities must have 3-5 items. idea_sparks "
-        f"must have EXACTLY 2 or 3 items, each a one-line spark under 15 "
-        f"words. Do not pad idea_sparks beyond 3.\n\n"
+        f"must have EXACTLY 3 items, each a complete product concept under "
+        f"40 words following the '[Product] for [user] that [does what] — "
+        f"only possible now because [tech enables what was impossible]' "
+        f"template. Each spark MUST name a specific user and a 'why now' "
+        f"clause.\n\n"
         f"Shape example (for one item):\n{example}"
     )
 
