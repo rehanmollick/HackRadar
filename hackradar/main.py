@@ -219,16 +219,16 @@ async def run_scan(
                 pass_num=2,
                 provider=config.PASS2_PROVIDER,
                 model=config.PASS2_MODEL,
-                open_score=s.open_score,
-                novelty_score=s.novelty_score,
+                usability_score=s.usability_score,
+                innovation_score=s.innovation_score,
+                underexploited_score=s.underexploited_score,
                 wow_score=s.wow_score,
-                build_score=s.build_score,
                 total_score=s.total_score,
                 summary=s.summary,
-                hackathon_idea=s.hackathon_idea,
-                tech_stack=s.tech_stack,
-                why_now=s.why_now,
-                effort_estimate=s.effort_estimate,
+                what_the_tech_does=s.what_the_tech_does,
+                key_capabilities=s.key_capabilities,
+                idea_sparks=s.idea_sparks,
+                prompt_version=config.PROMPT_VERSION,
             )
         await db.finish_scan(
             scan_id,
@@ -315,13 +315,18 @@ async def _cmd_scan(args) -> int:
     print(f"{'=' * 70}")
     for i, s in enumerate(top, 1):
         print(f"\n#{i}  [{s.total_score:.2f}]  {s.item.title}")
-        print(f"    Open={s.open_score:.0f} Novelty={s.novelty_score:.0f} "
-              f"Wow={s.wow_score:.0f} Build={s.build_score:.0f}")
+        print(
+            f"    Use={s.usability_score:.0f} Inno={s.innovation_score:.0f} "
+            f"Under={s.underexploited_score:.0f} Wow={s.wow_score:.0f}"
+        )
         print(f"    {s.item.source}  |  {s.item.source_url}")
         if s.summary:
             print(f"    {s.summary}")
-        if s.hackathon_idea:
-            print(f"    IDEA: {s.hackathon_idea}")
+        if s.what_the_tech_does:
+            print(f"    TECH: {s.what_the_tech_does[:200]}...")
+        if s.idea_sparks:
+            for spark in s.idea_sparks[:3]:
+                print(f"      • {spark}")
     print()
     return 0
 

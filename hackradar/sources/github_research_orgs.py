@@ -12,6 +12,9 @@ from hackradar.sources import register_source
 
 logger = logging.getLogger(__name__)
 
+# Must match the label in config.HIGH_TRUST_SOURCES exactly.
+_SOURCE = "GitHub Research Orgs"
+
 
 @register_source("github_research_orgs")
 def scrape(lookback_hours: int = 48) -> ScrapeResult:
@@ -56,7 +59,7 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
                         title=f"{org_name}/{repo.name}",
                         description=description,
                         date=created_at,
-                        source="github_research_orgs",
+                        source=_SOURCE,
                         source_url=repo.html_url,
                         github_url=repo.html_url,
                         category="ai_research",

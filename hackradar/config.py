@@ -37,13 +37,55 @@ def validate_keys() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Scoring weights (unchanged from V1)
+# Scoring weights (rev 3.1 — tech discovery, not product ideation)
 # ---------------------------------------------------------------------------
-WEIGHT_OPEN = 0.20
-WEIGHT_NOVELTY = 0.35
-WEIGHT_WOW = 0.25
-WEIGHT_BUILD = 0.20
+# The old 4-criterion rubric (Open/Novelty/Wow/Build) was reframed in rev 3.1
+# because it was surfacing product pitches instead of impressive tech. The
+# user wins hackathons by finding the TECH first; product ideation is his
+# own contribution. See memory/feedback_hackradar_is_tech_discovery.md.
+#
+# Rev 3.1 rubric:
+#   Usability 30% — can I actually build with this TODAY? Strict artifact
+#                   calibration: code+weights+demo > code+weights > paper+weights
+#                   > paper only > closed API. Pushes pure research papers
+#                   below the fold without hard-dropping them.
+#   Innovation 35% — is the underlying tech genuinely new/interesting?
+#                    Dominant single ranker; Innovation is what matters most
+#                    when in doubt on ordering.
+#   Underexploited 25% — has nobody built products on this yet? Niche is good.
+#   Wow 10% — does the tech itself provoke "wait, what?" (not demo sizzle).
+#
+# total = U*0.30 + I*0.35 + Un*0.25 + W*0.10
+#
+# Canonical test cases (see memory):
+#   TRIBE v2 (U9 I10 Un10 W10)      = 9.70
+#   code+weights no demo            = 9.10
+#   paper+weights no code           = 8.20
+#   pure research paper             = 7.60
+#   closed API                      = 7.30
+WEIGHT_USABILITY = 0.30
+WEIGHT_INNOVATION = 0.35
+WEIGHT_UNDEREXPLOITED = 0.25
+WEIGHT_WOW = 0.10
 SCORE_THRESHOLD = 6.5
+
+# High-conviction threshold: Usability ≥ 7 AND Innovation ≥ 9 AND
+# Underexploited ≥ 8 AND Wow ≥ 7. Pure research papers CANNOT be
+# high-conviction regardless of how impressive the idea sounds.
+HIGH_CONVICTION_MIN_USABILITY = 7.0
+HIGH_CONVICTION_MIN_INNOVATION = 9.0
+HIGH_CONVICTION_MIN_UNDEREXPLOITED = 8.0
+HIGH_CONVICTION_MIN_WOW = 7.0
+
+# ---------------------------------------------------------------------------
+# Prompt versioning for score cache keying
+# ---------------------------------------------------------------------------
+# Bump this MANUALLY whenever prompts.py is edited in a way that changes
+# scoring behavior (rubric wording, calibration, schema). See memory
+# feedback_prompt_version_bump.md. The score cache is keyed on
+# (content_hash, prompt_version) so stale cached scores don't mask broken
+# prompt changes.
+PROMPT_VERSION = "v2"
 
 # ---------------------------------------------------------------------------
 # Pipeline settings
@@ -66,7 +108,7 @@ PASS1_OPENROUTER_MODEL = os.environ.get(
     "PASS1_OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
 )
 PASS1_BATCH_SIZE = int(os.environ.get("PASS1_BATCH_SIZE", "10"))
-PASS1_TRIAGE_THRESHOLD = float(os.environ.get("PASS1_TRIAGE_THRESHOLD", "5.0"))
+PASS1_TRIAGE_THRESHOLD = float(os.environ.get("PASS1_TRIAGE_THRESHOLD", "6.5"))
 # Cerebras llama3.1-8b is 60K TPM + 30 RPM. 8s per batch of 10 = ~7 RPM
 # and ~40K TPM — comfortably under both limits with headroom for variance.
 PASS1_INTER_BATCH_SLEEP_S = float(os.environ.get("PASS1_INTER_BATCH_SLEEP_S", "8.0"))
@@ -90,14 +132,39 @@ PASS3_RATE_LIMIT_PER_HOUR = int(os.environ.get("PASS3_RATE_LIMIT_PER_HOUR", "20"
 
 # Items from these sources bypass the Pass 1 triage filter entirely.
 # Protects TRIBE-v2-type drops from being dropped by an 8B triage model.
+#
+# IMPORTANT: These strings must exactly match the `_SOURCE` constants
+# emitted by each scraper in hackradar/sources/*.py. The scrapers use
+# human-readable labels ("Meta AI Blog"), NOT slugs ("meta_ai_blog").
+# A bug from earlier used slugs here and the bypass silently never fired.
 HIGH_TRUST_SOURCES = set(
-    os.environ.get(
+    s.strip()
+    for s in os.environ.get(
         "HIGH_TRUST_SOURCES",
-        "meta_ai_blog,deepmind_blog,google_research_blog,microsoft_research_blog,"
-        "apple_ml_blog,stability_ai_blog,mistral_blog,nvidia_blog,"
-        "anthropic_research,openai_research,github_research_orgs,huggingface_papers",
+        "Meta AI Blog,Google DeepMind Blog,Google Research Blog,"
+        "Microsoft Research Blog,Apple ML Research,Stability AI Blog,"
+        "Mistral Blog,NVIDIA Developer Blog,Anthropic Research,"
+        "OpenAI Research,GitHub Research Orgs,HuggingFace Papers",
     ).split(",")
 )
+
+# Map high-trust source labels to their parent research org. Used to feed
+# `owner_org` into Pass 2 so the LLM has something to ground Innovation
+# and Underexploited scoring on ("is this from a known lab?").
+SOURCE_TO_ORG: dict[str, str] = {
+    "Meta AI Blog": "Meta FAIR",
+    "Google DeepMind Blog": "Google DeepMind",
+    "Google Research Blog": "Google Research",
+    "Microsoft Research Blog": "Microsoft Research",
+    "Apple ML Research": "Apple ML Research",
+    "Stability AI Blog": "Stability AI",
+    "Mistral Blog": "Mistral AI",
+    "NVIDIA Developer Blog": "NVIDIA",
+    "Anthropic Research": "Anthropic",
+    "OpenAI Research": "OpenAI",
+    "GitHub Research Orgs": "research lab GitHub org",
+    "HuggingFace Papers": "HF Daily Papers (curated)",
+}
 
 # ---------------------------------------------------------------------------
 # Storage

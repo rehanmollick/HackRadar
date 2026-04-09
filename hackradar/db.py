@@ -72,11 +72,32 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
 
 
 async def init() -> None:
-    """Apply the initial schema. Idempotent via CREATE TABLE IF NOT EXISTS."""
-    sql_path = MIGRATIONS_DIR / "0001_initial.sql"
-    schema_sql = sql_path.read_text()
+    """Apply all numbered migrations in order.
+
+    0001_initial.sql is idempotent via CREATE TABLE IF NOT EXISTS.
+    Later migrations use ALTER TABLE ADD COLUMN, which SQLite doesn't
+    support with IF NOT EXISTS — so we execute statements one at a time
+    and swallow "duplicate column" errors, making the whole thing
+    idempotent across restarts.
+    """
+    migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     async with _connect() as db:
-        await db.executescript(schema_sql)
+        for sql_path in migration_files:
+            schema_sql = sql_path.read_text()
+            # Split on ';' + newline so we can catch per-statement errors.
+            statements = [s.strip() for s in schema_sql.split(";") if s.strip()]
+            for stmt in statements:
+                try:
+                    await db.execute(stmt)
+                except aiosqlite.OperationalError as e:
+                    msg = str(e).lower()
+                    # These are the "already-applied" cases — safe to skip.
+                    if (
+                        "duplicate column" in msg
+                        or "already exists" in msg
+                    ):
+                        continue
+                    raise
         await db.commit()
 
 
@@ -344,10 +365,16 @@ async def get_items_for_scan(
     async with _connect() as db:
         cursor = await db.execute(
             """
-            SELECT items.*, scores.total_score, scores.summary, scores.hackathon_idea,
-                   scores.open_score, scores.novelty_score, scores.wow_score,
-                   scores.build_score, scores.provider, scores.model,
-                   scores.tech_stack, scores.why_now, scores.effort_estimate
+            SELECT items.*,
+                   scores.total_score, scores.summary,
+                   scores.usability_score, scores.innovation_score,
+                   scores.underexploited_score, scores.wow_score,
+                   scores.what_the_tech_does, scores.key_capabilities,
+                   scores.idea_sparks, scores.prompt_version,
+                   scores.open_score, scores.novelty_score,
+                   scores.build_score, scores.hackathon_idea,
+                   scores.tech_stack, scores.why_now, scores.effort_estimate,
+                   scores.provider, scores.model
             FROM items
             JOIN scores ON scores.item_id = items.id
             WHERE scores.scan_id = ? AND scores.pass = 2 AND scores.total_score >= ?
@@ -371,33 +398,43 @@ async def record_score(
     pass_num: int,
     provider: str,
     model: str,
-    open_score: Optional[float] = None,
-    novelty_score: Optional[float] = None,
+    # Rev 3.1 rubric fields (primary).
+    usability_score: Optional[float] = None,
+    innovation_score: Optional[float] = None,
+    underexploited_score: Optional[float] = None,
     wow_score: Optional[float] = None,
-    build_score: Optional[float] = None,
     total_score: Optional[float] = None,
     summary: Optional[str] = None,
-    hackathon_idea: Optional[str] = None,
-    tech_stack: Optional[str] = None,
-    why_now: Optional[str] = None,
-    effort_estimate: Optional[str] = None,
+    what_the_tech_does: Optional[str] = None,
+    key_capabilities: Optional[list[str]] = None,
+    idea_sparks: Optional[list[str]] = None,
+    prompt_version: Optional[str] = None,
     raw_response: Optional[str] = None,
 ) -> int:
+    """Insert a rev 3.1 score row.
+
+    `key_capabilities` and `idea_sparks` are serialized to JSON strings
+    for storage. Read-side deserializes in the API layer.
+    """
+    key_caps_json = json.dumps(key_capabilities) if key_capabilities else None
+    idea_sparks_json = json.dumps(idea_sparks) if idea_sparks else None
     async with _connect() as db:
         cursor = await db.execute(
             """
             INSERT INTO scores (
                 item_id, scan_id, pass, provider, model,
-                open_score, novelty_score, wow_score, build_score, total_score,
-                summary, hackathon_idea, tech_stack, why_now, effort_estimate,
-                raw_response, scored_at
+                usability_score, innovation_score, underexploited_score,
+                wow_score, total_score,
+                summary, what_the_tech_does, key_capabilities, idea_sparks,
+                prompt_version, raw_response, scored_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item_id, scan_id, pass_num, provider, model,
-                open_score, novelty_score, wow_score, build_score, total_score,
-                summary, hackathon_idea, tech_stack, why_now, effort_estimate,
-                raw_response, _now_iso(),
+                usability_score, innovation_score, underexploited_score,
+                wow_score, total_score,
+                summary, what_the_tech_does, key_caps_json, idea_sparks_json,
+                prompt_version, raw_response, _now_iso(),
             ),
         )
         await db.commit()

@@ -282,8 +282,12 @@ def _build_chat_system(item_row: dict[str, Any], scored: dict[str, Any]) -> str:
     if scored:
         if scored.get("summary"):
             bits.append(f"Pass 2 summary: {scored['summary']}")
-        if scored.get("hackathon_idea"):
-            bits.append(f"Pass 2 hackathon idea: {scored['hackathon_idea']}")
+        if scored.get("what_the_tech_does"):
+            bits.append(f"Pass 2 tech explainer: {scored['what_the_tech_does']}")
+        if scored.get("idea_sparks"):
+            sparks = scored["idea_sparks"]
+            if isinstance(sparks, list):
+                bits.append("Pass 2 idea sparks: " + " | ".join(sparks))
     return "\n".join(bits)
 
 
@@ -411,4 +415,12 @@ def _item_row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
             out["all_sources"] = []
     if isinstance(out.get("has_demo_space"), int):
         out["has_demo_space"] = bool(out["has_demo_space"])
+    # Rev 3.1 rich score fields are stored as JSON strings.
+    for json_field in ("key_capabilities", "idea_sparks"):
+        raw = out.get(json_field)
+        if isinstance(raw, str) and raw:
+            try:
+                out[json_field] = json.loads(raw)
+            except json.JSONDecodeError:
+                out[json_field] = None
     return out

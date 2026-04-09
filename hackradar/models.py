@@ -66,26 +66,36 @@ class ScrapeResult:
 
 
 class ScoredItemResponse(BaseModel):
-    """Full Pass 2 scoring response. One per item in a batch.
+    """Full Pass 2 scoring response — rev 3.1 tech-discovery rubric.
+
+    Four scores (1-10 each):
+      usability_score    — can I actually build with this TODAY? (30%)
+      innovation_score   — is the underlying tech genuinely new? (35%)
+      underexploited_score — has nobody built products on this yet? (25%)
+      wow_score          — does the tech itself provoke "wait, what?" (10%)
+
+    Flagship content is a TECH EXPLAINER, not a product pitch:
+      what_the_tech_does — 4-6 sentences covering model/architecture/capability
+      key_capabilities   — 3-5 bullets: hardware req, license, SOTA claims
+      idea_sparks        — 2-3 ONE-LINE brainstorm sparks. Not structured.
 
     `title` is optional because larger reasoning models (e.g. qwen-3-235b)
     sometimes omit it even when the prompt demands it. We fall back to
     positional matching in _zip_scored_responses when titles are missing.
-    `summary` is also optional for the same reason — some models skip it
-    on low-scoring items despite the schema.
+    `summary` stays Optional because some models skip it on low-scoring
+    items despite the schema.
     """
 
     title: Optional[str] = None
-    open_score: float
-    novelty_score: float
+    usability_score: float
+    innovation_score: float
+    underexploited_score: float
     wow_score: float
-    build_score: float
     total_score: float = 0.0
     summary: Optional[str] = ""
-    hackathon_idea: Optional[str] = None
-    tech_stack: Optional[str] = None
-    why_now: Optional[str] = None
-    effort_estimate: Optional[str] = None
+    what_the_tech_does: Optional[str] = None
+    key_capabilities: Optional[list[str]] = None
+    idea_sparks: Optional[list[str]] = None
 
 
 class ScoringBatchResponse(BaseModel):
@@ -110,16 +120,15 @@ class TriageBatchResponse(BaseModel):
 
 @dataclasses.dataclass
 class ScoredItem:
-    """An Item with its scores attached, used after scoring phase."""
+    """An Item with its rev 3.1 scores attached."""
 
     item: Item
-    open_score: float
-    novelty_score: float
+    usability_score: float
+    innovation_score: float
+    underexploited_score: float
     wow_score: float
-    build_score: float
     total_score: float
     summary: str
-    hackathon_idea: Optional[str] = None
-    tech_stack: Optional[str] = None
-    why_now: Optional[str] = None
-    effort_estimate: Optional[str] = None
+    what_the_tech_does: Optional[str] = None
+    key_capabilities: Optional[list[str]] = None
+    idea_sparks: Optional[list[str]] = None

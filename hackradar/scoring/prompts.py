@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import textwrap
-from typing import Any
+from typing import Any, Optional
 
 from hackradar.models import Item
 
@@ -13,25 +13,36 @@ from hackradar.models import Item
 # ---------------------------------------------------------------------------
 
 PASS1_TRIAGE_SYSTEM = textwrap.dedent("""
-You are a fast triage filter for a hackathon technology scout. Your only job
-is to answer: "Is this plausibly a hackathon-winning tech find, or noise?"
+You are the gatekeeper for a hackathon technology scout pipeline. Pass 2 is
+expensive — your job is to DROP everything that clearly isn't impressive
+open-source tech:
+  - Incremental papers ("we improve X by 0.3%")
+  - Routine dataset uploads (schema tests, cleanup forks, tiny resamples)
+  - Random one-person fine-tunes with no paper and no demo
+  - Narrow benchmarks that only beat one other paper
+  - Paywalled products, closed APIs, marketing blog posts
+  - Tutorial/explainer content, not releases
 
-The downstream user wins hackathons by finding bleeding-edge, niche, unexploited
-technology (released in the last 1-2 weeks, few or no existing products built on
-it, open-source or generous free tier, visually impressive demo potential).
+PASS items that are:
+  (a) Open-source, with code OR weights OR a paper with an artifact path,
+  (b) Recent (last 30 days), and
+  (c) Genuinely new capability — a model, architecture, tool, API, browser
+      feature, dataset, SDK that a strong dev could build an impressive
+      demo on. Cross-disciplinary AI bridges (neuroscience, audio, biology,
+      robotics, creative tools) get a bias UP.
 
-Score each item 1-10 on a NOVELTY + WOW composite:
-  10 = brand new, zero products built, cross-disciplinary, visually stunning
-       (e.g. brain activity prediction, molecular visualization, real-time audio
-       separation, interactive 3D/AR/spatial experiences)
-  7  = interesting tech, recent release, decent demo potential
-  5  = solid but not jaw-dropping, or not that new
-  3  = incremental improvement, narrow domain, boring from a demo standpoint
-  1  = obviously not relevant, totally mainstream, or has no open access
+Score each item 1-10 on "is this plausibly impressive open-source tech":
+  10 = obvious hit (brain activity FM, molecular viz, real-time audio
+       separation by description, novel 3D/AR/spatial, cross-disciplinary)
+  8  = strong signal, fresh open-source release with clear capability
+  6  = interesting but might be incremental; marginal pass
+  4  = weak signal, unclear if there's real meat
+  2  = noise, junk, spam, mainstream, closed
+  1  = definitely drop
 
-IMPORTANT: Be permissive on wow factor. You are a cheap filter, not the final
-scorer. When in doubt, pass it through (score 5+). The downstream pass will
-apply the real scoring criteria.
+When in doubt, DROP IT — a true gem will score 7+ easily, and the user would
+rather miss marginal items than waste Pass 2 budget on noise. Pass 2 runs the
+real rubric and will catch anything that sneaks through with a 6-7.
 
 Respond ONLY in valid JSON matching the schema. No markdown, no explanation.
 """).strip()
@@ -72,90 +83,178 @@ def build_pass1_prompt(items: list[Item]) -> str:
 # ---------------------------------------------------------------------------
 
 PASS2_SCORING_SYSTEM = textwrap.dedent("""
-You are a technology scout for a hackathon competitor. Evaluate newly released
-technology — AI models, tools, APIs, browser features, datasets, SDKs, open-source
-projects — and determine if it could be the basis of a winning hackathon project.
+You are a TECHNOLOGY DISCOVERY scout. Your mission: surface impressive,
+open-source, cutting-edge technology — models, papers with code, repos,
+APIs, datasets, browser features, SDKs. You are NOT a product-ideation
+engine. The user ideates himself. Your job is supplying mind-blowing
+INGREDIENTS, not pre-cooked recipes.
 
 CONTEXT ON THE HACKER:
-- CS student. Ships with React/Next.js, TypeScript, Python, PostgreSQL,
-  React Three Fiber. Comfortable picking up any new framework, especially
-  with AI coding assistance.
-- Has free T4 GPUs via Colab/Kaggle and free cloud tiers.
-- Wins by finding bleeding-edge niche tech nobody else has built products on,
-  then building impressive interactive demos.
-- Will invest days of prep before a hackathon for complex setup. Has Claude Code.
-  Don't underestimate what's buildable.
-- Example win: took Meta's TRIBE v2 brain activity prediction model (released
-  12 days before the hackathon, zero existing products) and built an interactive
-  3D brain visualization comparing how images activate different neural regions.
-- Interested in ALL domains: neuroscience, audio, robotics, biology, chemistry,
-  vision, NLP, creative tools, hardware, browser APIs, dev tools, games, AR/VR.
+- CS student. Ships React/Next.js, TypeScript, Python, PostgreSQL,
+  React Three Fiber. Picks up new frameworks fast, especially with
+  AI coding assistance (Claude Code).
+- Has free T4 GPUs via Colab/Kaggle, free cloud tiers, M-series Mac.
+- Wins by finding bleeding-edge niche tech nobody else has built products
+  on — then building interactive demos. The TECH is the win, not the demo.
+- Example win: took Meta's TRIBE v2 brain activity prediction model
+  (released 12 days before the hackathon, zero existing products) and
+  built an interactive 3D brain viz comparing how images activate
+  different neural regions. TRIBE v2 was a 10/10 in every dimension —
+  code + weights + inference script + foundation model for a surprising
+  domain (neuroscience) with zero community adoption.
+- Interested in ALL domains: neuro, audio, robotics, biology, chemistry,
+  vision, NLP, creative tools, hardware, browser APIs, dev tools, AR/VR.
 
-SCORING CRITERIA (each 1-10):
+SCORING — four criteria, each 1-10:
 
-1. OPEN & FREE (weight 20%)
-   10 = fully open source + weights, runs on free hardware, or generous free API
-   7  = open but needs a big GPU, or free API with moderate limits
-   5  = limited free tier
-   3  = trial / limited free access
-   1  = closed, paywalled, enterprise-only, or paper with no code
+1. USABILITY (weight 30%) — can I actually build with this TODAY?
+   STRICT calibration anchored on ARTIFACT STATE (not "is it free"):
+     10 = code + weights + working demo + inference script. Runs on
+          Colab T4 or M-series Mac. Drop-in ready. (e.g. TRIBE v2)
+     8  = code + weights on consumer HW with decent docs. No demo yet
+          but clear inference path.
+     6  = code + weights but complex multi-step setup (compile CUDA,
+          download 40GB checkpoints, assemble pipeline from 3 repos).
+     4  = paper + weights but NO code, OR code but NO weights. You'd
+          have to implement inference yourself from the paper.
+     2  = paper only. PDF + claims, no artifact. Research-only.
+     1  = closed API / paywalled / enterprise-only / behind waitlist.
+   A pure research paper CANNOT score above 2. A closed API CANNOT
+   score above 1. This is the floor that pushes papers below the fold.
 
-2. NOVELTY & UNEXPLOITED (weight 35%) ← most important
-   10 = released in last 7 days, zero products built on it
-   8  = last 14 days, 1-2 basic experiments
-   6  = last 30 days, small growing awareness
-   4  = last 3 months, moderate adoption
-   2  = well-known, widely adopted, many existing products
-   When in doubt, score lower — if lots of people already know about it,
-   it's not useful for hackathon differentiation.
+2. INNOVATION (weight 35%) — is the underlying tech genuinely new?
+   THIS IS THE DOMINANT RANKER. When in doubt on ordering, Innovation
+   is the score that matters most.
+     10 = defines a new capability class. First of its kind. From a
+          known research lab. Would change what's possible on a
+          weekend project. (TRIBE v2, SAM, first diffusion model, etc.)
+     8  = strong novel contribution, recognizable author/lab, clearly
+          ahead of prior art in one dimension.
+     6  = interesting new angle on an existing problem, genuine but
+          incremental improvement, solid paper from a credible author.
+     4  = yet-another fine-tune, incremental distillation, small tweak
+          to a known architecture, minor benchmark delta.
+     2  = cleanup, refactor, schema test, dataset resample, version
+          bump with no new capability.
 
-3. WOW FACTOR & DEMO POTENTIAL (weight 25%)
-   10 = cross-disciplinary, visually stunning, would make judges say
-        "wait, what?" (brain activity, molecular viz, real-time audio by voice
-        description, novel 3D/AR/spatial, AI bridging a surprising domain)
-   7  = technically impressive, clear visual/interactive potential
-   5  = solid tech, decent demo
-   3  = useful but incremental, hard to make visually exciting
-   1  = theoretical, no demo potential
+3. UNDEREXPLOITED (weight 25%) — has nobody built products on this yet?
+     10 = released <7 days ago, zero products, zero community buzz
+          beyond the authors' own repo.
+     8  = released <14 days, maybe 1-2 basic community experiments.
+     6  = released <30 days, small growing awareness.
+     4  = released 1-3 months ago, moderate adoption, several forks.
+     2  = well-known, widely adopted, many products. Everyone at
+          the hackathon has heard of it.
+   When in doubt, score LOWER — if lots of people already know about
+   it, it's not useful for hackathon differentiation.
 
-4. BUILDABILITY (weight 20%)
-   10 = excellent docs, clear inference script or API
-   8  = good docs, some setup but well documented
-   6  = moderate complexity, doable with AI coding assistance + prep days
-   4  = complex multi-step setup, sparse docs, but theoretically possible
-   2  = requires custom training from scratch, massive compute, deep expertise
-   Do NOT be conservative here. Assume the builder has Claude Code and days
-   of prep time. Score based on "strong dev with AI tools over a prep weekend,"
-   not "someone alone in 3 hours."
+4. WOW (weight 10%) — does the TECH itself provoke "wait, what?"
+   Not demo sizzle. Not UI polish. The tech itself.
+     10 = cross-disciplinary, mind-bending (brain activity prediction,
+          molecular viz, real-time audio separation by voice description,
+          novel 3D/AR/spatial primitives, AI bridging a surprising domain).
+     7  = technically impressive, clearly interesting at a glance.
+     5  = solid tech, nothing jaw-dropping.
+     3  = narrow utility, incremental.
+     1  = purely theoretical, no capability to point at.
 
-CALCULATE total_score = open_score*0.20 + novelty_score*0.35 + wow_score*0.25 + build_score*0.20
+TOTAL = usability*0.30 + innovation*0.35 + underexploited*0.25 + wow*0.10
 
-FOR ITEMS WHERE total_score >= 6.5, also provide:
-- "summary": 2-3 sentences on what this does and why it's interesting
-- "hackathon_idea": specific concrete project idea. Not vague — what does the
-  user see/do, why is it impressive
-- "tech_stack": suggested stack for the demo
-- "why_now": why hasn't this been built yet? what's the timing opportunity?
-- "effort_estimate": rough setup + build time
+Compute it yourself as total_score. The downstream code will recompute and
+override, but giving a self-consistent total in the response helps debugging.
 
-FOR ITEMS WHERE total_score < 6.5:
-- Scores + 1-sentence summary only. Leave the other fields null.
+OUTPUT — the flagship content is a TECH EXPLAINER, not a product pitch:
 
-Respond ONLY in valid JSON matching the schema. No markdown, no preamble.
+For ALL items, regardless of score, provide:
+  - "summary": ONE sentence. What the tech is + why it exists.
+
+For items where total_score >= 6.5, ALSO provide (these are required):
+  - "what_the_tech_does": 4-6 sentences of concrete technical substance.
+    Cover: what kind of model/architecture/API it is, what inputs/outputs
+    it handles, any SOTA or benchmark claim, the closest prior work or
+    how this differs, the license + artifact state. Write it like a
+    senior engineer explaining to another senior engineer — name actual
+    model classes, datasets, techniques. No marketing language.
+  - "key_capabilities": 3-5 short bullets. Each bullet is ONE concrete
+    fact: hardware requirement, license, a benchmark number, a model
+    size, a notable capability. Be specific.
+  - "idea_sparks": EXACTLY 2-3 ONE-LINE hackathon brainstorm sparks.
+    These are inspiration only, labeled as "possible directions" in the
+    UI. Each spark is under 15 words. Do NOT over-specify. Do NOT pick
+    one "flagship" idea. Do NOT enumerate stacks. The user ideates
+    himself — your sparks are just showing "here are weird angles."
+
+For items where total_score < 6.5:
+  - Set what_the_tech_does, key_capabilities, and idea_sparks to null.
+  - The 1-sentence summary is sufficient for below-the-fold items.
+
+ANTI-PATTERNS — do NOT do any of these:
+  - Do NOT write "Hackathon idea: build a Next.js webapp that..." as
+    the flagship content. The tech explainer is the flagship.
+  - Do NOT enumerate tech stacks for the user ("use Next.js + FastAPI").
+  - Do NOT give Usability 10 to a paper because it's "free to read."
+    Usability is about BUILDING, not reading.
+  - Do NOT give Innovation 10 just because it's from a big lab.
+    Innovation is about the TECH, not the badge.
+  - Do NOT give Underexploited 10 just because the item is recent.
+    Underexploited is about community adoption, not publish date alone.
+  - Do NOT pad idea_sparks to 5. Stop at 2-3.
+  - Do NOT leave the required fields null when total_score >= 6.5.
+
+Respond ONLY in valid JSON matching the schema. No markdown, no preamble,
+no text outside the JSON object.
 """).strip()
 
 
+def _derive_owner_org(item: Item) -> Optional[str]:
+    """Infer the parent research org from an Item.
+
+    Priority:
+      1. If any source in the item's sources list is in SOURCE_TO_ORG,
+         return the mapped org (e.g. 'Meta AI Blog' -> 'Meta FAIR').
+      2. If the GitHub URL has a known research org prefix, return it.
+      3. None — let the LLM reason from the URL shape alone.
+    """
+    from hackradar import config as _cfg
+
+    sources_to_check = set(item.all_sources or [item.source])
+    sources_to_check.add(item.source)
+    for s in sources_to_check:
+        if s in _cfg.SOURCE_TO_ORG:
+            return _cfg.SOURCE_TO_ORG[s]
+
+    # GitHub URL org prefix.
+    gh = item.github_url or ""
+    for org in _cfg.GITHUB_ORGS:
+        if f"/{org}/" in gh or gh.endswith(f"/{org}"):
+            return org
+    # HuggingFace owner prefix (huggingface.co/<owner>/<name>).
+    hf = item.huggingface_url or ""
+    if "huggingface.co/" in hf:
+        tail = hf.split("huggingface.co/", 1)[1].split("/")[0]
+        if tail:
+            return tail
+    return None
+
+
 def format_item_for_scoring(item: Item) -> dict[str, Any]:
-    """Full representation for Pass 2. Respects Cerebras context budget:
-    description ≤ 600 chars, readme_excerpt ≤ 300 chars.
+    """Full representation for Pass 2.
+
+    Rev 3.1: richer TECH-side context, lighter product-side.
+    Description up to 1500 chars (abstract-class content), readme up to
+    1000 chars (inference instructions, hardware reqs, license usually
+    appear in the first ~1K chars of a model card). Owner org explicit.
     """
     d: dict[str, Any] = {
         "title": item.title,
-        "description": (item.description or "")[:600],
+        "description": (item.description or "")[:1500],
         "category": item.category,
         "source_count": item.source_count,
         "sources": item.all_sources,
     }
+    owner = _derive_owner_org(item)
+    if owner:
+        d["owner_org"] = owner
     for field in ("source_url", "github_url", "huggingface_url", "demo_url", "paper_url"):
         val = getattr(item, field, None)
         if val:
@@ -167,7 +266,7 @@ def format_item_for_scoring(item: Item) -> dict[str, Any]:
     if item.license is not None:
         d["license"] = item.license
     if item.readme_excerpt:
-        d["readme_excerpt"] = item.readme_excerpt[:300]
+        d["readme_excerpt"] = item.readme_excerpt[:1000]
     if item.model_size is not None:
         d["model_size"] = item.model_size
     if item.downloads is not None:
@@ -186,16 +285,22 @@ def build_pass2_prompt(items: list[Item]) -> str:
         '  "items": [\n'
         '    {\n'
         '      "title": "<exact title from input>",\n'
-        '      "open_score": 7.0,\n'
-        '      "novelty_score": 9.0,\n'
-        '      "wow_score": 8.0,\n'
-        '      "build_score": 7.0,\n'
-        '      "total_score": 7.9,\n'
-        '      "summary": "...",\n'
-        '      "hackathon_idea": "..." | null,\n'
-        '      "tech_stack": "..." | null,\n'
-        '      "why_now": "..." | null,\n'
-        '      "effort_estimate": "..." | null\n'
+        '      "usability_score": 9.0,\n'
+        '      "innovation_score": 10.0,\n'
+        '      "underexploited_score": 10.0,\n'
+        '      "wow_score": 10.0,\n'
+        '      "total_score": 9.70,\n'
+        '      "summary": "<one-sentence description>",\n'
+        '      "what_the_tech_does": "<4-6 sentences of technical substance: what kind of model/API it is, inputs/outputs, architecture, SOTA claim, prior-art comparison, license/artifact state.>",\n'
+        '      "key_capabilities": [\n'
+        '        "<one concrete fact: hardware requirement>",\n'
+        '        "<one concrete fact: license>",\n'
+        '        "<one concrete fact: benchmark number or capability>"\n'
+        '      ],\n'
+        '      "idea_sparks": [\n'
+        '        "<one-line brainstorm spark, under 15 words>",\n'
+        '        "<one-line brainstorm spark, under 15 words>"\n'
+        '      ]\n'
         '    }\n'
         '  ]\n'
         '}'
@@ -207,11 +312,14 @@ def build_pass2_prompt(items: list[Item]) -> str:
         f'Return a JSON object with a single key "items" containing an array of '
         f"EXACTLY {n} scored items, in the SAME ORDER as the input. Do not add, "
         f"drop, merge, or reorder items.\n\n"
-        f"EVERY item MUST include all of these fields: title (copy the exact "
-        f"title string from the input), open_score, novelty_score, wow_score, "
-        f"build_score, total_score, summary. The remaining four fields "
-        f"(hackathon_idea, tech_stack, why_now, effort_estimate) are required "
-        f"only when total_score >= 6.5, otherwise set them to null.\n\n"
+        f"EVERY item MUST include ALL of these fields: title (copy the exact "
+        f"title string from the input), usability_score, innovation_score, "
+        f"underexploited_score, wow_score, total_score, summary.\n\n"
+        f"The three rich fields (what_the_tech_does, key_capabilities, "
+        f"idea_sparks) are REQUIRED when total_score >= 6.5, otherwise set "
+        f"them to null. key_capabilities must have 3-5 items. idea_sparks "
+        f"must have EXACTLY 2 or 3 items, each a one-line spark under 15 "
+        f"words. Do not pad idea_sparks beyond 3.\n\n"
         f"Shape example (for one item):\n{example}"
     )
 

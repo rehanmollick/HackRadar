@@ -67,10 +67,17 @@ async def pass1_triage(
     threshold = threshold if threshold is not None else config.PASS1_TRIAGE_THRESHOLD
 
     # Partition: high-trust bypasses, others go through triage.
+    # After dedup, an item's primary .source may be the firehose that
+    # happened to scrape it first, but its all_sources may include a
+    # high-trust source. Honor the bypass if ANY source in the merged
+    # list is high-trust — that's the TRIBE v2 case where a research
+    # blog + HF + GitHub all merge into one item.
     bypass_items: list[Item] = []
     to_triage: list[Item] = []
     for item in items:
-        if item.source in config.HIGH_TRUST_SOURCES:
+        sources_to_check = set(item.all_sources or [item.source])
+        sources_to_check.add(item.source)
+        if sources_to_check & config.HIGH_TRUST_SOURCES:
             bypass_items.append(item)
         else:
             to_triage.append(item)
@@ -288,26 +295,30 @@ def _zip_scored_responses(
 def _make_scored_item(
     item: Item, resp: ScoredItemResponse, provider_name: str
 ) -> ScoredItem:
-    # Recompute the total server-side to guard against LLM arithmetic drift.
+    # Recompute the total server-side per rev 3.1 weights to guard
+    # against LLM arithmetic drift.
     total = (
-        resp.open_score * config.WEIGHT_OPEN
-        + resp.novelty_score * config.WEIGHT_NOVELTY
+        resp.usability_score * config.WEIGHT_USABILITY
+        + resp.innovation_score * config.WEIGHT_INNOVATION
+        + resp.underexploited_score * config.WEIGHT_UNDEREXPLOITED
         + resp.wow_score * config.WEIGHT_WOW
-        + resp.build_score * config.WEIGHT_BUILD
     )
+    # Gate the rich tech-explainer output so we don't waste UI space
+    # on low-scoring items. The tech explainer IS the flagship content,
+    # so SCORE_THRESHOLD (6.5) is the right cutoff — items below that
+    # just get a 1-line summary.
     gated = total >= config.SCORE_THRESHOLD
     return ScoredItem(
         item=item,
-        open_score=resp.open_score,
-        novelty_score=resp.novelty_score,
+        usability_score=resp.usability_score,
+        innovation_score=resp.innovation_score,
+        underexploited_score=resp.underexploited_score,
         wow_score=resp.wow_score,
-        build_score=resp.build_score,
         total_score=total,
-        summary=resp.summary,
-        hackathon_idea=resp.hackathon_idea if gated else None,
-        tech_stack=resp.tech_stack if gated else None,
-        why_now=resp.why_now if gated else None,
-        effort_estimate=resp.effort_estimate if gated else None,
+        summary=resp.summary or "",
+        what_the_tech_does=resp.what_the_tech_does if gated else None,
+        key_capabilities=resp.key_capabilities if gated else None,
+        idea_sparks=resp.idea_sparks if gated else None,
     )
 
 

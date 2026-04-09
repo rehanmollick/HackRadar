@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 HF_PAPERS_URL = "https://huggingface.co/papers"
 
+# Must match the label in config.HIGH_TRUST_SOURCES exactly. Changing
+# this string without also updating HIGH_TRUST_SOURCES silently breaks
+# the Pass 1 bypass for HF curated papers.
+_SOURCE = "HuggingFace Papers"
+
 
 @register_source("huggingface_papers")
 def scrape(lookback_hours: int = 48) -> ScrapeResult:
@@ -75,7 +80,7 @@ def scrape(lookback_hours: int = 48) -> ScrapeResult:
                     title=title,
                     description=description,
                     date=date,
-                    source="huggingface_papers",
+                    source=_SOURCE,
                     source_url=source_url,
                     paper_url=paper_url,
                     category="ai_research",
