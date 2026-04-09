@@ -90,6 +90,26 @@ async def call_chat_json(
     except (KeyError, IndexError, TypeError) as exc:
         raise ProviderError(f"{model}: unexpected response shape: {data}") from exc
 
+    # Free OpenRouter models occasionally return content=None when their
+    # upstream rejects the prompt (content filter, no provider available,
+    # finish_reason='error', etc). Treat that as a recoverable provider
+    # error so the resilient layer falls through to the next provider
+    # instead of crashing the whole scan with TypeError.
+    if content is None:
+        finish_reason = (
+            data.get("choices", [{}])[0].get("finish_reason")
+            if isinstance(data, dict)
+            else None
+        )
+        raise ProviderError(
+            f"{model}: response content is None "
+            f"(finish_reason={finish_reason!r}, raw={str(data)[:300]})"
+        )
+    if not isinstance(content, str):
+        raise ProviderError(
+            f"{model}: response content has unexpected type {type(content).__name__}"
+        )
+
     try:
         parsed_json = json.loads(content)
     except json.JSONDecodeError as exc:
