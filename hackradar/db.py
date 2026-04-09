@@ -84,8 +84,19 @@ async def init() -> None:
     async with _connect() as db:
         for sql_path in migration_files:
             schema_sql = sql_path.read_text()
-            # Split on ';' + newline so we can catch per-statement errors.
-            statements = [s.strip() for s in schema_sql.split(";") if s.strip()]
+            # Strip SQL line comments (-- ...) before splitting. aiosqlite's
+            # execute() wants exactly one statement, and a fragment that is
+            # only a comment (or a comment followed by the tail of a prior
+            # statement) tokenizes as garbage — which is why splitting raw
+            # text on ';' used to blow up with "near 'new': syntax error".
+            cleaned_lines = []
+            for line in schema_sql.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("--"):
+                    continue
+                cleaned_lines.append(line)
+            cleaned = "\n".join(cleaned_lines)
+            statements = [s.strip() for s in cleaned.split(";") if s.strip()]
             for stmt in statements:
                 try:
                     await db.execute(stmt)
