@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { api, ScanRow, ScoredItem } from "../lib/api";
+import { inferTopic, topicCounts, Topic } from "../lib/topics";
 import ScanTrigger from "../components/ScanTrigger";
 import ItemCard from "../components/ItemCard";
+import TopicFilter from "../components/TopicFilter";
 
 /**
  * Render a scan as LLM-optimized Markdown.
@@ -128,6 +130,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pollScanId, setPollScanId] = useState<number | null>(null);
+  const [disabledTopics, setDisabledTopics] = useState<Set<Topic>>(new Set());
 
   async function loadLatest() {
     setLoading(true);
@@ -136,6 +139,7 @@ export default function HomePage() {
       const res = await api.latestScan();
       setScan(res.scan);
       setItems(res.items);
+      setDisabledTopics(new Set());
     } catch (e: any) {
       if (String(e.message).startsWith("404")) {
         setScan(null);
@@ -214,11 +218,47 @@ export default function HomePage() {
           {items.length === 0 ? (
             <p className="text-sm text-stone-500">No scored items in this scan.</p>
           ) : (
-            <div className="space-y-3">
-              {items.map((item, i) => (
-                <ItemCard key={item.id} item={item} rank={i + 1} />
-              ))}
-            </div>
+            (() => {
+              // Keep the full scan order so the rank stays stable when chips
+              // toggle. Filtering just hides rows — it never re-ranks.
+              const buckets = topicCounts(items);
+              const filtered = items
+                .map((item, idx) => ({ item, rank: idx + 1 }))
+                .filter(({ item }) => !disabledTopics.has(inferTopic(item)));
+              return (
+                <div className="space-y-3">
+                  <TopicFilter
+                    buckets={buckets}
+                    disabled={disabledTopics}
+                    onToggle={(topic) => {
+                      setDisabledTopics((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(topic)) next.delete(topic);
+                        else next.add(topic);
+                        return next;
+                      });
+                    }}
+                    onReset={() => setDisabledTopics(new Set())}
+                  />
+                  {disabledTopics.size > 0 && (
+                    <p className="text-xs text-stone-500">
+                      Showing {filtered.length} of {items.length} items (
+                      {disabledTopics.size} topic
+                      {disabledTopics.size === 1 ? "" : "s"} hidden)
+                    </p>
+                  )}
+                  {filtered.length === 0 ? (
+                    <p className="text-sm text-stone-500">
+                      All topics hidden — click "All" to reset.
+                    </p>
+                  ) : (
+                    filtered.map(({ item, rank }) => (
+                      <ItemCard key={item.id} item={item} rank={rank} />
+                    ))
+                  )}
+                </div>
+              );
+            })()
           )}
         </section>
       )}
