@@ -37,16 +37,29 @@ export type ScoredItem = {
   stars: number | null;
   language: string | null;
   license: string | null;
+
+  // Rev 3.1 tech-discovery rubric: Usability 30% + Innovation 35%
+  // + Underexploited 25% + Wow 10%.
   total_score: number;
-  open_score: number;
-  novelty_score: number;
+  usability_score: number;
+  innovation_score: number;
+  underexploited_score: number;
   wow_score: number;
-  build_score: number;
+
+  // Flagship content is a TECH EXPLAINER, not a product pitch.
   summary: string | null;
-  hackathon_idea: string | null;
-  tech_stack: string | null;
-  why_now: string | null;
-  effort_estimate: string | null;
+  what_the_tech_does: string | null;
+  key_capabilities: string[] | null;
+  idea_sparks: string[] | null;
+
+  // Legacy fields (kept for back-compat with pre-rev-3.1 rows).
+  open_score?: number | null;
+  novelty_score?: number | null;
+  build_score?: number | null;
+  hackathon_idea?: string | null;
+  tech_stack?: string | null;
+  why_now?: string | null;
+  effort_estimate?: string | null;
 };
 
 export type SourceHealth = {

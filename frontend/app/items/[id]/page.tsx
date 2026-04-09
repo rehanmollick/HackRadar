@@ -43,15 +43,17 @@ export default function ItemDetailPage() {
             {item.total_score.toFixed(2)}
           </span>
           <span className="font-mono text-xs text-stone-500">
-            O{item.open_score.toFixed(0)} N{item.novelty_score.toFixed(0)} W
-            {item.wow_score.toFixed(0)} B{item.build_score.toFixed(0)}
+            U{(item.usability_score ?? 0).toFixed(0)} I
+            {(item.innovation_score ?? 0).toFixed(0)} Un
+            {(item.underexploited_score ?? 0).toFixed(0)} W
+            {(item.wow_score ?? 0).toFixed(0)}
           </span>
         </div>
         <h1 className="text-3xl font-bold leading-tight">{item.title}</h1>
         <p className="mt-1 font-mono text-xs text-stone-500">
           {item.source} · {item.category} ·{" "}
           {item.date.slice(0, 10)}
-          {item.stars !== null && ` · ★ ${item.stars.toLocaleString()}`}
+          {item.stars !== null && item.stars !== undefined && ` · ★ ${item.stars.toLocaleString()}`}
           {item.language && ` · ${item.language}`}
         </p>
       </header>
@@ -65,15 +67,47 @@ export default function ItemDetailPage() {
       {item.summary && (
         <section className="rounded-lg border border-stone-200 bg-white p-5">
           <h3 className="mb-2 font-mono text-sm font-bold uppercase tracking-wider text-stone-500">
-            Pass 2 summary
+            Summary
           </h3>
-          <p className="text-stone-800">{item.summary}</p>
-          {item.hackathon_idea && (
-            <div className="mt-4 rounded-md border-l-4 border-radar bg-radar/5 px-3 py-2">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-radar-dark">
-                hackathon idea
-              </span>
-              <p className="mt-1 text-stone-800">{item.hackathon_idea}</p>
+          <p className="italic text-stone-700">{item.summary}</p>
+
+          {item.what_the_tech_does && (
+            <div className="mt-4">
+              <h4 className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                What the tech does
+              </h4>
+              <p className="leading-relaxed text-stone-800">
+                {item.what_the_tech_does}
+              </p>
+            </div>
+          )}
+
+          {item.key_capabilities && item.key_capabilities.length > 0 && (
+            <div className="mt-4">
+              <h4 className="mb-2 font-mono text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                Key capabilities
+              </h4>
+              <ul className="space-y-1 text-sm text-stone-800">
+                {item.key_capabilities.map((cap, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-radar-dark">▸</span>
+                    <span>{cap}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {item.idea_sparks && item.idea_sparks.length > 0 && (
+            <div className="mt-4 border-t border-stone-200 pt-3">
+              <h4 className="mb-1 font-mono text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                possible directions (brainstorm)
+              </h4>
+              <ul className="space-y-0.5 text-xs italic text-stone-600">
+                {item.idea_sparks.map((spark, i) => (
+                  <li key={i}>· {spark}</li>
+                ))}
+              </ul>
             </div>
           )}
         </section>
