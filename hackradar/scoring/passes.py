@@ -194,26 +194,29 @@ def _zip_triage_responses(
 # Pass 2
 # ---------------------------------------------------------------------------
 
-async def pass2_score(
-    triaged: list[TriagedItem],
+async def _pass2_score_pass(
+    items: list[Item],
     providers: list[LLMProvider],
-    batch_size: Optional[int] = None,
-    inter_batch_sleep_s: Optional[float] = None,
-) -> list[ScoredItem]:
-    """Run the Pass 2 full 4-criterion scorer on the triaged items."""
-    if not triaged:
-        return []
+    batch_size: int,
+    sleep_s: float,
+    pass_label: str,
+) -> tuple[list[ScoredItem], list[Item]]:
+    """Run a single sweep through ``items`` at ``batch_size``.
 
-    batch_size = batch_size or config.PASS2_BATCH_SIZE
-    sleep_s = inter_batch_sleep_s if inter_batch_sleep_s is not None else config.PASS2_INTER_BATCH_SLEEP_S
-
-    items = [t.item for t in triaged]
+    Returns (scored, failed). An item is "failed" if the batch it belongs to
+    returned None from every provider, OR if the batch succeeded but the
+    response didn't include this item (unmatched by zip/title/fuzzy). Failed
+    items are handed back so the caller can retry them at a smaller batch.
+    """
     scored: list[ScoredItem] = []
-
+    failed: list[Item] = []
     num_batches = (len(items) + batch_size - 1) // batch_size
     for batch_idx, start in enumerate(range(0, len(items), batch_size)):
         batch = items[start : start + batch_size]
-        logger.info("Pass 2 batch %d/%d (%d items)", batch_idx + 1, num_batches, len(batch))
+        logger.info(
+            "Pass 2 [%s] batch %d/%d (%d items, bs=%d)",
+            pass_label, batch_idx + 1, num_batches, len(batch), batch_size,
+        )
 
         response, provider_name = await call_with_fallback(
             providers=providers,
@@ -222,15 +225,85 @@ async def pass2_score(
             response_schema=ScoringBatchResponse,
         )
         if response is None or not provider_name:
-            logger.warning("Pass 2 batch %d: all providers failed", batch_idx + 1)
-            continue
+            logger.warning(
+                "Pass 2 [%s] batch %d: all providers failed — %d items queued for retry",
+                pass_label, batch_idx + 1, len(batch),
+            )
+            failed.extend(batch)
+        else:
+            matched_items: set[int] = set()
+            for item, resp in _zip_scored_responses(batch, response):
+                scored.append(_make_scored_item(item, resp, provider_name))
+                matched_items.add(id(item))
+            # Any batch item that wasn't matched to a response gets retried too.
+            for item in batch:
+                if id(item) not in matched_items:
+                    failed.append(item)
 
-        for item, resp in _zip_scored_responses(batch, response):
-            scored.append(_make_scored_item(item, resp, provider_name))
-
-        # Natural pacing: sleep between batches to stay under Cerebras 30 RPM.
         if sleep_s > 0 and batch_idx < num_batches - 1:
             await asyncio.sleep(sleep_s)
+
+    return scored, failed
+
+
+async def pass2_score(
+    triaged: list[TriagedItem],
+    providers: list[LLMProvider],
+    batch_size: Optional[int] = None,
+    inter_batch_sleep_s: Optional[float] = None,
+) -> list[ScoredItem]:
+    """Run the Pass 2 full 4-criterion scorer on the triaged items.
+
+    Strategy: first sweep at the configured batch size. Items in batches that
+    failed (provider outage, DNS flake, response shape mangled, item dropped
+    from the response) go into a retry queue. The queue is re-run with
+    adaptively smaller batches (configured // 2, then 1) so a single
+    poison-pill item can't take down its neighbors. This is what recovers the
+    ~50-200 tail items that scan 5 lost to OpenRouter DNS flakes.
+    """
+    if not triaged:
+        return []
+
+    initial_bs = batch_size or config.PASS2_BATCH_SIZE
+    sleep_s = inter_batch_sleep_s if inter_batch_sleep_s is not None else config.PASS2_INTER_BATCH_SLEEP_S
+
+    items = [t.item for t in triaged]
+    scored: list[ScoredItem] = []
+
+    # Main sweep.
+    pass_scored, failed = await _pass2_score_pass(
+        items, providers, initial_bs, sleep_s, pass_label="main"
+    )
+    scored.extend(pass_scored)
+
+    # Adaptive retry ladder: step the batch size down until we hit 1.
+    retry_sizes: list[int] = []
+    bs = max(1, initial_bs // 2)
+    while bs >= 1:
+        if not retry_sizes or retry_sizes[-1] != bs:
+            retry_sizes.append(bs)
+        if bs == 1:
+            break
+        bs = max(1, bs // 2)
+
+    for retry_idx, retry_bs in enumerate(retry_sizes):
+        if not failed:
+            break
+        logger.warning(
+            "Pass 2 retry %d: %d items remaining, dropping batch size to %d",
+            retry_idx + 1, len(failed), retry_bs,
+        )
+        retry_scored, failed = await _pass2_score_pass(
+            failed, providers, retry_bs, sleep_s,
+            pass_label=f"retry-{retry_idx + 1}",
+        )
+        scored.extend(retry_scored)
+
+    if failed:
+        logger.error(
+            "Pass 2 gave up on %d items after exhausting retry ladder",
+            len(failed),
+        )
 
     logger.info("Pass 2 complete: %d/%d items scored", len(scored), len(items))
     return scored
